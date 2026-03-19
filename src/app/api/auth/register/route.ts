@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
@@ -15,10 +16,14 @@ export async function POST(request: Request) {
     }
 
     if (!/^\d+$/.test(nip)) {
-      return NextResponse.json({ error: 'NIP must contain only numbers' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'NIP must contain only numbers' },
+        { status: 400 }
+      );
     }
 
     const existing = await prisma.user.findUnique({ where: { nip } });
+
     if (existing) {
       return NextResponse.json(
         { error: 'User with this NIP already exists' },
@@ -42,6 +47,7 @@ export async function POST(request: Request) {
       nip: user.nip,
       role: user.role,
       name: user.name,
+      sessionId: crypto.randomUUID(),
     });
 
     const response = NextResponse.json({
@@ -62,7 +68,9 @@ export async function POST(request: Request) {
     });
 
     return response;
-  } catch {
+  } catch (error) {
+    console.error('Register error:', error);
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
