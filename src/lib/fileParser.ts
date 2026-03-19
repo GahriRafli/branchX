@@ -54,7 +54,8 @@ export function parseCSV(text: string): ParsedTask[] {
 
 export async function parsePDF(buffer: Buffer): Promise<ParsedTask[]> {
   // Dynamic import for pdf-parse to avoid SSR issues
-  const pdfParse = (await import('pdf-parse')).default;
+  const pdfReq: any = await import('pdf-parse');
+  const pdfParse = pdfReq.default || pdfReq;
   const data = await pdfParse(buffer);
   const text = data.text;
 
