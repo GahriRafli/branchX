@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
-import { parseExcel, parseCSV, parsePDF } from '@/lib/fileParser';
+import { parseExcel, parseCSV } from '@/lib/fileParser';
 
 export async function POST(request: Request) {
   try {
     const session = await getSession();
+
     if (!session || session.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
@@ -27,23 +28,32 @@ export async function POST(request: Request) {
       const text = buffer.toString('utf-8');
       tasks = parseCSV(text);
     } else if (fileName.endsWith('.pdf')) {
-      tasks = await parsePDF(buffer);
+      return NextResponse.json(
+        { error: 'PDF upload is not supported yet. Please upload .xlsx, .xls, or .csv files.' },
+        { status: 400 }
+      );
     } else {
       return NextResponse.json(
-        { error: 'Unsupported file type. Please upload .xlsx, .csv, or .pdf files.' },
+        { error: 'Unsupported file type. Please upload .xlsx, .xls, or .csv files.' },
         { status: 400 }
       );
     }
 
-    // Bulk create tasks in DB
+    if (!tasks || tasks.length === 0) {
+      return NextResponse.json(
+        { error: 'No tasks could be parsed from the uploaded file.' },
+        { status: 400 }
+      );
+    }
+
     const created = await prisma.$transaction(
-      tasks.map((t) =>
+      tasks.map((task) =>
         prisma.task.create({
           data: {
-            title: t.title,
-            description: t.description,
-            priority: t.priority,
-            status: t.status,
+            title: task.title,
+            description: task.description,
+            priority: task.priority,
+            status: task.status,
             sourceFile: file.name,
           },
         })
@@ -57,6 +67,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error('Upload error:', error);
+
     return NextResponse.json(
       { error: 'Failed to process file' },
       { status: 500 }
