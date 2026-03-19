@@ -10,7 +10,7 @@
 !.yarn/releases
 !.yarn/versions
 
-/prisma/seed.ts
+!/prisma/seed.ts
 
 # testing
 /coverage
