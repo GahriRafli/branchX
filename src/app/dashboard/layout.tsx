@@ -74,36 +74,44 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <AuthContext.Provider value={{ user, loading, isAdmin, logout }}>
       <InactivityTracker timeoutMinutes={1} />
-      <div className="dashboard-wrapper">
-        <button className="mobile-menu-toggle" onClick={() => setSidebarOpen(true)}>☰</button>
-        {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
-        <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-          <div className="sidebar-header">
-            <div className="logo">TheLeads</div>
-            <div className="logo-subtitle">{isAdmin ? 'Admin Panel' : 'User Panel'}</div>
-          </div>
+      <div className="dashboard-layout">
+        <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
+          {sidebarOpen ? '✕' : '☰'}
+        </button>
+        {sidebarOpen && <div className={`sidebar-overlay ${sidebarOpen ? 'active' : ''}`} onClick={() => setSidebarOpen(false)} />}
+        <aside className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
+          <div className="sidebar-logo">TheLeads</div>
+          <div className="sidebar-subtitle">{isAdmin ? 'Admin Panel' : 'User Panel'}</div>
           <nav className="sidebar-nav">
-            <Link href="/dashboard/dashboard" className={`nav-link ${pathname === '/dashboard/dashboard' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>📊 Dashboard</Link>
-            <Link href="/dashboard/tasks" className={`nav-link ${pathname === '/dashboard/tasks' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>📋 Tasks</Link>
+            <Link href="/dashboard/dashboard" className={`sidebar-link ${pathname === '/dashboard/dashboard' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+              <span className="icon">📊</span> Dashboard
+            </Link>
+            <Link href="/dashboard/tasks" className={`sidebar-link ${pathname === '/dashboard/tasks' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+              <span className="icon">📋</span> Tasks
+            </Link>
             {isAdmin && (
               <>
-                <Link href="/dashboard/upload" className={`nav-link ${pathname === '/dashboard/upload' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>📁 Upload Files</Link>
-                <Link href="/dashboard/users" className={`nav-link ${pathname === '/dashboard/users' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>👥 Users</Link>
+                <Link href="/dashboard/upload" className={`sidebar-link ${pathname === '/dashboard/upload' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+                  <span className="icon">📁</span> Upload Files
+                </Link>
+                <Link href="/dashboard/users" className={`sidebar-link ${pathname === '/dashboard/users' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+                  <span className="icon">👥</span> Users
+                </Link>
               </>
             )}
           </nav>
           <div className="sidebar-footer">
-            <div className="user-info">
-              <div className="user-avatar">{user.name.charAt(0)}</div>
-              <div className="user-details">
-                <div className="user-name">{user.name}</div>
-                <div className="user-role">{user.role} (NIP: {user.nip})</div>
+            <div className="sidebar-user">
+              <div className="sidebar-avatar">{user.name.charAt(0)}</div>
+              <div className="sidebar-user-info">
+                <div className="sidebar-user-name">{user.name}</div>
+                <div className="sidebar-user-role">{user.role} (NIP: {user.nip})</div>
               </div>
             </div>
-            <button onClick={logout} className="sign-out-btn">Sign Out</button>
+            <button onClick={logout} className="btn btn-secondary btn-sm" style={{ width: '100%', marginTop: '12px' }}>Sign Out</button>
           </div>
         </aside>
-        <main className="dashboard-content">{children}</main>
+        <main className="main-content">{children}</main>
       </div>
     </AuthContext.Provider>
   );
