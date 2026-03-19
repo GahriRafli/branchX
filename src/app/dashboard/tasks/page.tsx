@@ -298,7 +298,7 @@ function TasksPageContent() {
                 <label>Assignee</label>
                 <select className="form-select" value={taskForm.assigneeId} onChange={e => setTaskForm({...taskForm, assigneeId: e.target.value})}>
                   <option value="">Unassigned</option>
-                  {users.map(u => <option key={u.id} value={u.id}>{u.name} (NIP: {u.nip})</option>)}
+                  {users.filter(u => u.role !== 'ADMIN').map(u => <option key={u.id} value={u.id}>{u.name} (NIP: {u.nip})</option>)}
                 </select>
               </div>
               <div className="modal-actions">

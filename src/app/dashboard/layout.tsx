@@ -15,9 +15,15 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
+  logout: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, loading: true, isAdmin: false });
+const AuthContext = createContext<AuthContextType>({ 
+  user: null, 
+  loading: true, 
+  isAdmin: false,
+  logout: async () => {} 
+});
 
 export const useAuth = () => useContext(AuthContext);
 
@@ -49,7 +55,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const isAdmin = user?.role === 'ADMIN';
 
-  const handleLogout = async () => {
+  const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/');
   };
@@ -63,71 +69,76 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   }
 
+  if (!user) return null;
+
   return (
-    <AuthContext.Provider value={{ user, loading, isAdmin }}>
-      <div className="dashboard-layout">
-        {/* Mobile menu button */}
-        <button className="mobile-menu-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>
-          {sidebarOpen ? '✕' : '☰'}
-        </button>
-
-        {/* Sidebar Overlay */}
-        <div className={`sidebar-overlay ${sidebarOpen ? 'active' : ''}`} onClick={() => setSidebarOpen(false)} />
-
-        {/* Sidebar */}
-        <aside className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
-          <div className="sidebar-logo">TheLeads</div>
-          <div className="sidebar-subtitle">{isAdmin ? 'Admin Panel' : 'User Panel'}</div>
-
+    <AuthContext.Provider value={{ user, loading, isAdmin, logout }}>
+      <InactivityTracker timeoutMinutes={1} />
+      <div className="dashboard-wrapper">
+        <button className="mobile-menu-toggle" onClick={() => setSidebarOpen(true)}>☰</button>
+        {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+        <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
+          <div className="sidebar-header">
+            <div className="logo">TheLeads</div>
+            <div className="logo-subtitle">{isAdmin ? 'Admin Panel' : 'User Panel'}</div>
+          </div>
           <nav className="sidebar-nav">
-            <Link
-              href="/dashboard/dashboard"
-              className={`sidebar-link ${pathname === '/dashboard/dashboard' ? 'active' : ''}`}
-            >
-              <span className="icon">📊</span> Dashboard
-            </Link>
-            <Link
-              href="/dashboard/tasks"
-              className={`sidebar-link ${pathname === '/dashboard/tasks' ? 'active' : ''}`}
-            >
-              <span className="icon">📋</span> Tasks
-            </Link>
+            <Link href="/dashboard/dashboard" className={`nav-link ${pathname === '/dashboard/dashboard' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>📊 Dashboard</Link>
+            <Link href="/dashboard/tasks" className={`nav-link ${pathname === '/dashboard/tasks' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>📋 Tasks</Link>
             {isAdmin && (
               <>
-                <Link
-                  href="/dashboard/upload"
-                  className={`sidebar-link ${pathname === '/dashboard/upload' ? 'active' : ''}`}
-                >
-                  <span className="icon">📁</span> Upload Files
-                </Link>
-                <Link
-                  href="/dashboard/users"
-                  className={`sidebar-link ${pathname === '/dashboard/users' ? 'active' : ''}`}
-                >
-                  <span className="icon">👥</span> Users
-                </Link>
+                <Link href="/dashboard/upload" className={`nav-link ${pathname === '/dashboard/upload' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>📁 Upload Files</Link>
+                <Link href="/dashboard/users" className={`nav-link ${pathname === '/dashboard/users' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>👥 Users</Link>
               </>
             )}
           </nav>
-
           <div className="sidebar-footer">
-            <div className="sidebar-user">
-              <div className="sidebar-avatar">{user?.name?.[0]?.toUpperCase()}</div>
-              <div className="sidebar-user-info">
-                <div className="sidebar-user-name">{user?.name}</div>
-                <div className="sidebar-user-role">{user?.role} (NIP: {user?.nip})</div>
+            <div className="user-info">
+              <div className="user-avatar">{user.name.charAt(0)}</div>
+              <div className="user-details">
+                <div className="user-name">{user.name}</div>
+                <div className="user-role">{user.role} (NIP: {user.nip})</div>
               </div>
             </div>
-            <button className="btn btn-secondary btn-sm" onClick={handleLogout} style={{ width: '100%', marginTop: '12px' }}>
-              Sign Out
-            </button>
+            <button onClick={logout} className="sign-out-btn">Sign Out</button>
           </div>
         </aside>
-
-        <main className="main-content">
-          {children}
-        </main>
+        <main className="dashboard-content">{children}</main>
       </div>
     </AuthContext.Provider>
   );
+}
+
+function InactivityTracker({ timeoutMinutes }: { timeoutMinutes: number }) {
+  const { logout } = useAuth();
+  
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        console.log('User inactive for', timeoutMinutes, 'minutes. Logging out...');
+        logout();
+      }, timeoutMinutes * 60 * 1000);
+    };
+
+    // Events to track user activity
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    
+    events.forEach(event => {
+      document.addEventListener(event, resetTimer);
+    });
+
+    resetTimer(); // Start the timer initially
+
+    return () => {
+      clearTimeout(timeout);
+      events.forEach(event => {
+        document.removeEventListener(event, resetTimer);
+      });
+    };
+  }, [logout, timeoutMinutes]);
+
+  return null;
 }
