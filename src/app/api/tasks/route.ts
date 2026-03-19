@@ -1,0 +1,115 @@
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getSession } from '@/lib/auth';
+
+// GET all tasks (admin sees all, user sees only assigned)
+export async function GET() {
+  try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const where = session.role === 'ADMIN' ? {} : { assigneeId: session.userId };
+
+    const tasks = await prisma.task.findMany({
+      where,
+      include: { assignee: { select: { id: true, name: true, nip: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return NextResponse.json({ tasks });
+  } catch (err: any) {
+    console.error('GET Tasks error:', err);
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+  }
+}
+
+// POST create a task (admin only)
+export async function POST(request: Request) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { title, description, priority, status, assigneeId } = await request.json();
+
+    const task = await prisma.task.create({
+      data: {
+        title,
+        description: description || '',
+        priority: priority || 'MEDIUM',
+        status: status || 'TODO',
+        assigneeId: assigneeId || null,
+      },
+      include: { assignee: { select: { id: true, name: true, nip: true } } },
+    });
+
+    return NextResponse.json({ task }, { status: 201 });
+  } catch (err: any) {
+    console.error('POST Task error:', err);
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+  }
+}
+
+// PATCH update task(s) - bulk or single
+export async function PATCH(request: Request) {
+  try {
+    const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id, status, assigneeId, title, description, priority } = await request.json();
+
+    if (!id) {
+      return NextResponse.json({ error: 'Task ID required' }, { status: 400 });
+    }
+
+    // Standard users can only update status
+    const updateData: Record<string, string | null> = {};
+    if (status) updateData.status = status;
+
+    if (session.role === 'ADMIN') {
+      if (assigneeId !== undefined) updateData.assigneeId = assigneeId;
+      if (title) updateData.title = title;
+      if (description !== undefined) updateData.description = description;
+      if (priority) updateData.priority = priority;
+    }
+
+    const task = await prisma.task.update({
+      where: { id },
+      data: updateData,
+      include: { assignee: { select: { id: true, name: true, nip: true } } },
+    });
+
+    return NextResponse.json({ task });
+  } catch (err: any) {
+    console.error('PATCH Task error:', err);
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+  }
+}
+
+// DELETE a task (admin only)
+export async function DELETE(request: Request) {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Task ID required' }, { status: 400 });
+    }
+
+    await prisma.task.delete({ where: { id } });
+    return NextResponse.json({ message: 'Task deleted' });
+  } catch (err: any) {
+    console.error('DELETE Task error:', err);
+    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 });
+  }
+}
