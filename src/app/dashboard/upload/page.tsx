@@ -101,7 +101,7 @@ export default function UploadPage() {
                   paginatedHistory.map((file, i) => (
                     <tr key={i}>
                       <td><span className="file-icon">📄</span> {file}</td>
-                      <td><button className="btn btn-secondary btn-sm" onClick={() => router.push(`/dashboard/tasks?search=${file}`)}>View Tasks</button></td>
+                      <td><button className="btn btn-secondary btn-sm" onClick={() => router.push('/dashboard/tasks')}>View Tasks</button></td>
                     </tr>
                   ))
                 )}
