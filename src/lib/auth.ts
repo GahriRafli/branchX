@@ -10,6 +10,7 @@ export interface UserPayload {
   nip: string;
   role: string;
   name: string;
+  sessionId: string;
 }
 
 export async function createToken(payload: UserPayload): Promise<string> {

@@ -278,6 +278,28 @@ html, body {
   background: #ffd2cc;
 }
 
+.btn-excel {
+  background: var(--accent-green-light);
+  color: #006644;
+  border: 1px solid rgba(54, 179, 126, 0.3);
+}
+
+.btn-excel:hover {
+  background: #d4f7e5;
+  border-color: #36b37e;
+}
+
+.btn-csv {
+  background: var(--accent-purple-light);
+  color: #403294;
+  border: 1px solid rgba(101, 84, 192, 0.3);
+}
+
+.btn-csv:hover {
+  background: #dfe1ff;
+  border-color: #6554c0;
+}
+
 .login-toggle {
   text-align: center;
   margin-top: 20px;

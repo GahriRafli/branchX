@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import * as XLSX from 'xlsx';
 import { useAuth } from '../layout';
 
 interface Task {
@@ -31,27 +32,31 @@ function TasksPageContent() {
   const [loading, setLoading] = useState(true);
   
   // Sync filters with URL
-  const initialStatus = searchParams.get('status') || 'ALL';
+  const initialStatus = searchParams.get('status') || '';
   const initialSearch = searchParams.get('search') || '';
 
-  const [globalFilter, setGlobalFilter] = useState(initialSearch);
   const [statusFilter, setStatusFilter] = useState(initialStatus);
+  const [priorityFilter, setPriorityFilter] = useState('');
+  const [search, setSearch] = useState(initialSearch);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+
+  // Sorting states
+  const [sortField, setSortField] = useState<'title' | 'status' | 'priority' | 'assignee' | 'createdAt'>('createdAt');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // Modal states
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [taskForm, setTaskForm] = useState({ title: '', description: '', priority: 'MEDIUM', status: 'TODO', assigneeId: '' });
+  const [assignModal, setAssignModal] = useState<{ taskId: string; currentAssigneeId: string | null } | null>(null);
 
   useEffect(() => {
     const s = searchParams.get('status');
     if (s) setStatusFilter(s);
     const q = searchParams.get('search');
-    if (q) setGlobalFilter(q);
+    if (q) setSearch(q);
   }, [searchParams]);
-  const [priorityFilter, setPriorityFilter] = useState('ALL');
-  const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'createdAt', direction: 'desc' });
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
-
-  const [showTaskModal, setShowTaskModal] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [taskForm, setTaskForm] = useState({ title: '', description: '', priority: 'MEDIUM', status: 'TODO', assigneeId: '' });
-  const [assignModal, setAssignModal] = useState<{ taskId: string; currentAssigneeId: string | null } | null>(null);
 
   const fetchData = useCallback(async () => {
     const [tasksRes, usersRes] = await Promise.all([
@@ -69,27 +74,63 @@ function TasksPageContent() {
     fetchData();
   }, [fetchData]);
 
+  // Filter and Sort logic
   const filteredTasks = useMemo(() => {
     return tasks
       .filter(t => {
-        if (statusFilter !== 'ALL' && t.status !== statusFilter) return false;
-        if (priorityFilter !== 'ALL' && t.priority !== priorityFilter) return false;
-        if (globalFilter) {
-          const q = globalFilter.toLowerCase();
-          return t.title.toLowerCase().includes(q) || (t.assignee?.name || '').toLowerCase().includes(q);
-        }
-        return true;
+        const matchStatus = !statusFilter || t.status === statusFilter;
+        const matchPriority = !priorityFilter || t.priority === priorityFilter;
+        const matchSearch = !search || 
+          t.title.toLowerCase().includes(search.toLowerCase()) || 
+          t.description.toLowerCase().includes(search.toLowerCase());
+        return matchStatus && matchPriority && matchSearch;
       })
       .sort((a, b) => {
-        const key = sortConfig.key as keyof Task;
-        const aVal = (a[key] || '') as string;
-        const bVal = (b[key] || '') as string;
-        return sortConfig.direction === 'asc' ? (aVal > bVal ? 1 : -1) : (aVal < bVal ? 1 : -1);
+        let valA: any, valB: any;
+        
+        switch (sortField) {
+          case 'title': valA = a.title; valB = b.title; break;
+          case 'status': valA = a.status; valB = b.status; break;
+          case 'priority': 
+            const pMap: any = { LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
+            valA = pMap[a.priority] || 0;
+            valB = pMap[b.priority] || 0;
+            break;
+          case 'assignee': 
+            valA = a.assignee?.name || 'zzzz'; 
+            valB = b.assignee?.name || 'zzzz'; 
+            break;
+          case 'createdAt': valA = new Date(a.createdAt).getTime(); valB = new Date(b.createdAt).getTime(); break;
+          default: return 0;
+        }
+        
+        if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+        if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+        return 0;
       });
-  }, [tasks, statusFilter, priorityFilter, globalFilter, sortConfig]);
+  }, [tasks, statusFilter, priorityFilter, search, sortField, sortOrder]);
 
-  const paginatedTasks = filteredTasks.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginatedTasks = filteredTasks.slice((page - 1) * pageSize, page * pageSize);
   const totalPages = Math.ceil(filteredTasks.length / pageSize);
+
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+  };
+
+  const getPaginationGroup = () => {
+    let start = Math.max(page - 2, 1);
+    let end = Math.min(start + 4, totalPages);
+    if (end - start < 4) start = Math.max(end - 4, 1);
+    
+    const pages = [];
+    for (let i = start; i <= end; i++) pages.push(i);
+    return pages;
+  };
 
   const handleStatusChange = async (taskId: string, newStatus: string) => {
     await fetch('/api/tasks', {
@@ -114,6 +155,27 @@ function TasksPageContent() {
     if (!confirm('Delete this task?')) return;
     await fetch(`/api/tasks?id=${taskId}`, { method: 'DELETE' });
     fetchData();
+  };
+
+  const handleExport = (format: 'excel' | 'csv') => {
+    const dataToExport = filteredTasks.map(t => ({
+      Title: t.title,
+      Description: t.description,
+      Status: t.status,
+      Priority: t.priority,
+      Assignee: t.assignee?.name || 'Unassigned',
+      'Created At': new Date(t.createdAt).toLocaleString()
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Tasks');
+
+    if (format === 'excel') {
+      XLSX.writeFile(workbook, `tasks_export_${new Date().getTime()}.xlsx`);
+    } else {
+      XLSX.writeFile(workbook, `tasks_export_${new Date().getTime()}.csv`, { bookType: 'csv' });
+    }
   };
 
   const handleTaskSubmit = async (e: React.FormEvent) => {
@@ -149,7 +211,13 @@ function TasksPageContent() {
       <div className="table-container">
         <div className="table-header">
           <div className="table-title">Task Manager</div>
-          <div className="table-actions">
+          <div className="table-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button className="btn btn-excel btn-sm" onClick={() => handleExport('excel')}>
+              <span>📊</span> Export Excel
+            </button>
+            <button className="btn btn-csv btn-sm" onClick={() => handleExport('csv')}>
+              <span>📄</span> Export CSV
+            </button>
             {isAdmin && (
               <button className="btn btn-primary btn-sm" onClick={() => {
                 setEditingTask(null);
@@ -157,20 +225,20 @@ function TasksPageContent() {
                 setShowTaskModal(true);
               }}>Add Task</button>
             )}
-            <input className="search-input" placeholder="Search tasks..." value={globalFilter} onChange={e => setGlobalFilter(e.target.value)} />
+            <input className="search-input" placeholder="Search tasks..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
         </div>
 
         <div className="filter-row">
           <select className="filter-input" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="ALL">All Status</option>
+            <option value="">All Status</option>
             <option value="TODO">To Do</option>
             <option value="IN_PROGRESS">In Progress</option>
             <option value="BLOCKER">Blocker</option>
             <option value="DONE">Done</option>
           </select>
           <select className="filter-input" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
-            <option value="ALL">All Priority</option>
+            <option value="">All Priority</option>
             <option value="LOW">Low</option>
             <option value="MEDIUM">Medium</option>
             <option value="HIGH">High</option>
@@ -181,14 +249,26 @@ function TasksPageContent() {
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
-              <tr>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Priority</th>
-                {isAdmin && <th>Assignee</th>}
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
+                <tr>
+                  <th onClick={() => handleSort('title')} style={{ cursor: 'pointer' }}>
+                    Title {sortField === 'title' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th onClick={() => handleSort('status')} style={{ cursor: 'pointer' }}>
+                    Status {sortField === 'status' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th onClick={() => handleSort('priority')} style={{ cursor: 'pointer' }}>
+                    Priority {sortField === 'priority' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </th>
+                  {isAdmin && (
+                    <th onClick={() => handleSort('assignee')} style={{ cursor: 'pointer' }}>
+                      Assignee {sortField === 'assignee' && (sortOrder === 'asc' ? '↑' : '↓')}
+                    </th>
+                  )}
+                  <th onClick={() => handleSort('createdAt')} style={{ cursor: 'pointer' }}>
+                    Created {sortField === 'createdAt' && (sortOrder === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th>Actions</th>
+                </tr>
             </thead>
             <tbody>
               {paginatedTasks.map(task => (
@@ -236,26 +316,30 @@ function TasksPageContent() {
         
         {totalPages > 1 && (
             <div className="pagination">
-                <div className="pagination-info">
-                  Showing <strong>{(currentPage - 1) * pageSize + 1}</strong> to <strong>{Math.min(currentPage * pageSize, filteredTasks.length)}</strong> of <strong>{filteredTasks.length}</strong> tasks
-                </div>
-                <div className="pagination-numbers">
-                  <button className="pagination-btn" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>
-                    &laquo; Prev
+              <div className="pagination-info">
+                Showing <strong>{(page-1)*pageSize + 1}</strong> to <strong>{Math.min(page*pageSize, filteredTasks.length)}</strong> of <strong>{filteredTasks.length}</strong> tasks
+              </div>
+              <div className="pagination-numbers">
+                <button className="pagination-btn" disabled={page === 1} onClick={() => setPage(1)}>First</button>
+                <button className="pagination-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>&laquo; Prev</button>
+                
+                {page > 3 && totalPages > 5 && <span className="pagination-ellipsis">...</span>}
+                
+                {getPaginationGroup().map(item => (
+                  <button
+                    key={item}
+                    onClick={() => setPage(item)}
+                    className={`pagination-btn ${page === item ? 'active' : ''}`}
+                  >
+                    {item}
                   </button>
-                  {[...Array(totalPages)].map((_, i) => (
-                    <button
-                      key={i}
-                      className={`pagination-btn ${currentPage === i + 1 ? 'active' : ''}`}
-                      onClick={() => setCurrentPage(i + 1)}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
-                  <button className="pagination-btn" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>
-                    Next &raquo;
-                  </button>
-                </div>
+                ))}
+
+                {page < totalPages - 2 && totalPages > 5 && <span className="pagination-ellipsis">...</span>}
+
+                <button className="pagination-btn" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>Next &raquo;</button>
+                <button className="pagination-btn" disabled={page === totalPages} onClick={() => setPage(totalPages)}>Last</button>
+              </div>
             </div>
         )}
       </div>

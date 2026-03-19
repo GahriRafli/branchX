@@ -69,7 +69,7 @@ export default function UploadPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Upload Files</h1>
-          <p className="page-subtitle">Upload Excel, CSV, or PDF files to auto-generate tasks</p>
+          <p className="page-subtitle">Upload Excel or CSV files to auto-generate tasks</p>
         </div>
       </div>
 
@@ -80,10 +80,10 @@ export default function UploadPage() {
       )}
 
       <div className="upload-zone" style={{ position: 'relative' }}>
-        <input type="file" accept=".xlsx,.xls,.csv,.pdf" onChange={handleFileUpload} disabled={uploading} />
+        <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} disabled={uploading} />
         <div className="upload-icon">{uploading ? '⏳' : '☁️'}</div>
         <div className="upload-title">{uploading ? 'Processing file...' : 'Drop your file here or click to browse'}</div>
-        <div className="upload-desc">Supported formats: Excel (.xlsx), CSV (.csv), PDF (.pdf)</div>
+        <div className="upload-desc">Supported formats: Excel (.xlsx, .xls), CSV (.csv)</div>
       </div>
 
       <div className="history-section" style={{ marginTop: '48px' }}>

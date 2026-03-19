@@ -99,6 +99,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </Link>
               </>
             )}
+            <Link href="/dashboard/game" className={`sidebar-link ${pathname === '/dashboard/game' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+              <span className="icon">🎮</span> Mini Game
+            </Link>
           </nav>
           <div className="sidebar-footer">
             <div className="sidebar-user">
@@ -119,6 +122,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
 function InactivityTracker({ timeoutMinutes }: { timeoutMinutes: number }) {
   const { logout } = useAuth();
+  const pathname = usePathname();
   
   useEffect(() => {
     let timeout: NodeJS.Timeout;
@@ -131,22 +135,49 @@ function InactivityTracker({ timeoutMinutes }: { timeoutMinutes: number }) {
       }, timeoutMinutes * 60 * 1000);
     };
 
+    const checkSession = async () => {
+      try {
+        const res = await fetch('/api/auth/me');
+        const data = await res.json();
+        if (!data.user) {
+          console.log('Session invalidated by another login. Logging out...');
+          logout();
+        }
+      } catch (err) {
+        console.error('Session check failed:', err);
+      }
+    };
+
     // Events to track user activity
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
     
+    let lastCheck = 0;
+    const throttledCheck = () => {
+      const now = Date.now();
+      if (now - lastCheck > 10000) { // Check at most once every 10 seconds on interaction
+        lastCheck = now;
+        checkSession();
+      }
+      resetTimer();
+    };
+
     events.forEach(event => {
-      document.addEventListener(event, resetTimer);
+      document.addEventListener(event, throttledCheck);
     });
 
-    resetTimer(); // Start the timer initially
+    throttledCheck(); // Check once on mount/pathname change
+    
+    // Periodically check session (every 30 seconds as fallback)
+    const sessionInterval = setInterval(checkSession, 30000);
 
     return () => {
       clearTimeout(timeout);
+      clearInterval(sessionInterval);
       events.forEach(event => {
-        document.removeEventListener(event, resetTimer);
+        document.removeEventListener(event, throttledCheck);
       });
     };
-  }, [logout, timeoutMinutes]);
+  }, [logout, timeoutMinutes, pathname]); // Re-run tracker/check on pathname change
 
   return null;
 }

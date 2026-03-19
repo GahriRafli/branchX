@@ -11,12 +11,6 @@ export interface ParsedTask {
 type RowValue = string | number | boolean | null | undefined;
 type RowRecord = Record<string, RowValue>;
 
-type PdfParseResult = {
-  text: string;
-};
-
-type PdfParseFn = (buffer: Buffer) => Promise<PdfParseResult>;
-
 export function parseExcel(buffer: Buffer): ParsedTask[] {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
@@ -76,54 +70,6 @@ export function parseCSV(text: string): ParsedTask[] {
       status: 'TODO',
     };
   });
-}
-
-export async function parsePDF(buffer: Buffer): Promise<ParsedTask[]> {
-  const pdfModule = await import('pdf-parse');
-  const pdfParse = getPdfParse(pdfModule);
-
-  const data = await pdfParse(buffer);
-  const text = data.text ?? '';
-
-  const lines = text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 5);
-
-  if (lines.length === 0) {
-    return [
-      {
-        title: 'PDF Document Review',
-        description: text.substring(0, 500),
-        priority: 'MEDIUM',
-        status: 'TODO',
-      },
-    ];
-  }
-
-  return lines.slice(0, 50).map((line, index) => ({
-    title: line.substring(0, 100),
-    description: line.length > 100 ? line : `Task ${index + 1} from PDF`,
-    priority: 'MEDIUM',
-    status: 'TODO',
-  }));
-}
-
-function getPdfParse(module: unknown): PdfParseFn {
-  if (typeof module === 'function') {
-    return module as PdfParseFn;
-  }
-
-  if (
-    typeof module === 'object' &&
-    module !== null &&
-    'default' in module &&
-    typeof (module as { default?: unknown }).default === 'function'
-  ) {
-    return (module as { default: PdfParseFn }).default;
-  }
-
-  throw new Error('Failed to load pdf-parse module.');
 }
 
 function normalizePriority(value: string): string {
