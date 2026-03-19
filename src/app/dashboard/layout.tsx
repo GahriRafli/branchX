@@ -18,11 +18,11 @@ interface AuthContextType {
   logout: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({ 
-  user: null, 
-  loading: true, 
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
   isAdmin: false,
-  logout: async () => {} 
+  logout: async () => { }
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -123,7 +123,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 function InactivityTracker({ timeoutMinutes }: { timeoutMinutes: number }) {
   const { logout } = useAuth();
   const pathname = usePathname();
-  
+
   useEffect(() => {
     let timeout: NodeJS.Timeout;
 
@@ -150,20 +150,20 @@ function InactivityTracker({ timeoutMinutes }: { timeoutMinutes: number }) {
 
     // Events to track user activity
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
-    
+
     events.forEach(event => {
       document.addEventListener(event, resetTimer);
     });
 
     resetTimer(); // Start the timer initially
-    
+
     return () => {
       clearTimeout(timeout);
       events.forEach(event => {
         document.removeEventListener(event, resetTimer);
       });
     };
-  }, [logout, timeoutMinutes]); 
+  }, [logout, timeoutMinutes]);
 
   return null;
 }
