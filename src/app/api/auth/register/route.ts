@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
@@ -22,7 +21,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const existing = await prisma.user.findUnique({ where: { nip } });
+    const existing = await prisma.user.findUnique({ where: { nip } as any });
 
     if (existing) {
       return NextResponse.json(
@@ -39,22 +38,22 @@ export async function POST(request: Request) {
         nip,
         password: hashedPassword,
         role: role === 'ADMIN' ? 'ADMIN' : 'USER',
-      },
+      } as any,
     });
 
     const token = await createToken({
       userId: user.id,
-      nip: user.nip,
+      nip: (user as any).nip,
       role: user.role,
       name: user.name,
-      sessionId: crypto.randomUUID(),
+      sessionId: '', // Simple login
     });
 
     const response = NextResponse.json({
       user: {
         id: user.id,
         name: user.name,
-        nip: user.nip,
+        nip: (user as any).nip,
         role: user.role,
       },
     });

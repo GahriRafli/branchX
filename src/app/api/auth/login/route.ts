@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import { createToken } from '@/lib/auth';
-import crypto from 'crypto';
 
 export async function POST(request: Request) {
   try {
@@ -27,7 +26,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const passwordMatch = await bcrypt.compare(password, user.password);
+    const passwordMatch = await bcrypt.compare(password, (user as any).password);
     if (!passwordMatch) {
       return NextResponse.json(
         { error: 'Invalid credentials' },
@@ -35,18 +34,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const sessionId = crypto.randomUUID();
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { currentSessionId: sessionId } as any,
-    });
-
     const token = await createToken({
       userId: user.id,
       nip: (user as any).nip,
       role: user.role,
       name: user.name,
-      sessionId,
+      sessionId: '', // Simple login
     });
 
     const userResp = {

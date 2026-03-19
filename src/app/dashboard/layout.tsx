@@ -151,33 +151,19 @@ function InactivityTracker({ timeoutMinutes }: { timeoutMinutes: number }) {
     // Events to track user activity
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
     
-    let lastCheck = 0;
-    const throttledCheck = () => {
-      const now = Date.now();
-      if (now - lastCheck > 10000) { // Check at most once every 10 seconds on interaction
-        lastCheck = now;
-        checkSession();
-      }
-      resetTimer();
-    };
-
     events.forEach(event => {
-      document.addEventListener(event, throttledCheck);
+      document.addEventListener(event, resetTimer);
     });
 
-    throttledCheck(); // Check once on mount/pathname change
+    resetTimer(); // Start the timer initially
     
-    // Periodically check session (every 30 seconds as fallback)
-    const sessionInterval = setInterval(checkSession, 30000);
-
     return () => {
       clearTimeout(timeout);
-      clearInterval(sessionInterval);
       events.forEach(event => {
-        document.removeEventListener(event, throttledCheck);
+        document.removeEventListener(event, resetTimer);
       });
     };
-  }, [logout, timeoutMinutes, pathname]); // Re-run tracker/check on pathname change
+  }, [logout, timeoutMinutes]); 
 
   return null;
 }
