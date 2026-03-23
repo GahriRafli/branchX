@@ -8,16 +8,7 @@ export async function GET() {
       return NextResponse.json({ user: null }, { status: 401 });
     }
 
-    const user = await (prisma as any).user.findUnique({
-      where: { id: session.userId },
-      select: {
-        id: true,
-        nip: true,
-        role: true,
-        name: true,
-        can_access_monitoring: true,
-      },
-    });
+    // Session contains all necessary info
 
     return NextResponse.json({
       user: {
