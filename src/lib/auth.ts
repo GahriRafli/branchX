@@ -11,6 +11,7 @@ export interface UserPayload {
   role: string;
   name: string;
   sessionId: string;
+  can_access_monitoring: boolean;
 }
 
 export async function createToken(payload: UserPayload): Promise<string> {

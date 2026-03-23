@@ -11,8 +11,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const users = await prisma.user.findMany({
-      select: { id: true, name: true, nip: true, role: true, createdAt: true },
+    const users = await (prisma as any).user.findMany({
+      select: {
+        id: true,
+        name: true,
+        nip: true,
+        role: true,
+        can_access_monitoring: true,
+        createdAt: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -31,7 +38,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { name, nip, password, role } = await request.json();
+    const { name, nip, password, role, can_access_monitoring } = await request.json();
 
     if (!name || !nip || !password) {
       return NextResponse.json(
@@ -54,14 +61,21 @@ export async function POST(request: Request) {
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    const user = await prisma.user.create({
+    const user = await (prisma as any).user.create({
       data: {
         name,
         nip,
         password: hashedPassword,
-        role: role === 'ADMIN' ? 'ADMIN' : 'USER',
+        role: role || 'USER',
+        can_access_monitoring: !!can_access_monitoring,
       },
-      select: { id: true, name: true, nip: true, role: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        nip: true,
+        role: true,
+        can_access_monitoring: true,
+      },
     });
 
     return NextResponse.json({ user }, { status: 201 });
@@ -79,13 +93,13 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { id, name, nip, role, password } = await request.json();
+    const { id, name, nip, role, password, can_access_monitoring } = await request.json();
 
     if (!id) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    const updateData: Record<string, string> = {};
+    const updateData: Record<string, any> = {}; // Changed to any to allow boolean
     if (name) updateData.name = name;
     if (nip) {
       if (!/^\d+$/.test(nip)) {
@@ -95,11 +109,18 @@ export async function PATCH(request: Request) {
     }
     if (role) updateData.role = role === 'ADMIN' ? 'ADMIN' : 'USER';
     if (password) updateData.password = await bcrypt.hash(password, 12);
+    if (can_access_monitoring !== undefined) updateData.can_access_monitoring = !!can_access_monitoring;
 
-    const user = await prisma.user.update({
+    const user = await (prisma as any).user.update({
       where: { id },
       data: updateData,
-      select: { id: true, name: true, nip: true, role: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        nip: true,
+        role: true,
+        can_access_monitoring: true,
+      },
     });
 
     return NextResponse.json({ user });

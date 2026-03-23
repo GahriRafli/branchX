@@ -78,11 +78,36 @@ export async function PATCH(request: Request) {
       if (priority) updateData.priority = priority;
     }
 
+    const existingTask = await prisma.task.findUnique({
+      where: { id },
+      include: { assignee: { select: { name: true } } }
+    });
+
+    if (!existingTask) {
+      return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    }
+
     const task = await prisma.task.update({
       where: { id },
       data: updateData,
       include: { assignee: { select: { id: true, name: true, nip: true } } },
     });
+
+    if (status === 'DONE' && existingTask.status !== 'DONE') {
+      const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
+      const assigneeName = existingTask.assignee?.name || 'Seorang user';
+      if (admins.length > 0) {
+        await prisma.notification.createMany({
+          data: admins.map((admin: any) => ({
+            userId: admin.id,
+            type: 'TASK_DONE',
+            message: `${assigneeName} merubah status task menjadi DONE: ${existingTask.title}`,
+            referenceId: task.id,
+            isRead: false
+          }))
+        });
+      }
+    }
 
     return NextResponse.json({ task });
   } catch (err: any) {

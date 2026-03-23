@@ -47,6 +47,7 @@ function TasksPageContent() {
 
   // Modal states
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskForm, setTaskForm] = useState({ title: '', description: '', priority: 'MEDIUM', status: 'TODO', assigneeId: '' });
   const [assignModal, setAssignModal] = useState<{ taskId: string; currentAssigneeId: string | null } | null>(null);
@@ -151,9 +152,10 @@ function TasksPageContent() {
     fetchData();
   };
 
-  const handleDelete = async (taskId: string) => {
-    if (!confirm('Delete this task?')) return;
-    await fetch(`/api/tasks?id=${taskId}`, { method: 'DELETE' });
+  const handleDelete = async () => {
+    if (!showDeleteModal) return;
+    await fetch(`/api/tasks?id=${showDeleteModal}`, { method: 'DELETE' });
+    setShowDeleteModal(null);
     fetchData();
   };
 
@@ -305,7 +307,7 @@ function TasksPageContent() {
                           setTaskForm({ title: task.title, description: task.description || '', priority: task.priority, status: task.status, assigneeId: task.assigneeId || '' });
                           setShowTaskModal(true);
                       }}>Edit</button>}
-                      {isAdmin && <button className="btn btn-danger btn-sm" onClick={() => handleDelete(task.id)}>Delete</button>}
+                      {isAdmin && <button className="btn btn-danger btn-sm" onClick={() => setShowDeleteModal(task.id)}>Delete</button>}
                     </div>
                   </td>
                 </tr>
@@ -415,6 +417,20 @@ function TasksPageContent() {
             <div className="modal-actions">
               <button className="btn btn-secondary btn-sm" onClick={() => setAssignModal(null)}>Cancel</button>
               <button className="btn btn-primary btn-sm" onClick={() => handleAssign(assignModal.taskId, assignModal.currentAssigneeId)}>Assign</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Delete Modal */}
+      {showDeleteModal && (
+        <div className="modal-overlay" onClick={() => setShowDeleteModal(null)}>
+          <div className="modal-content" style={{ maxWidth: '400px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: '48px', color: 'var(--accent-red)', marginBottom: '16px' }}>⚠️</div>
+            <h2 className="modal-title">Delete Task</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>Are you sure you want to delete this task? This action cannot be undone.</p>
+            <div className="modal-actions" style={{ justifyContent: 'center' }}>
+              <button className="btn btn-secondary" onClick={() => setShowDeleteModal(null)}>Cancel</button>
+              <button className="btn btn-danger" onClick={handleDelete}>Delete Permanently</button>
             </div>
           </div>
         </div>

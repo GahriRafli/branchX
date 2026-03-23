@@ -40,6 +40,7 @@ export async function POST(request: Request) {
       role: user.role,
       name: user.name,
       sessionId: '', // Simple login
+      can_access_monitoring: (user as any).can_access_monitoring || user.role === 'ADMIN',
     });
 
     const userResp = {
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
       name: user.name,
       nip: (user as any).nip,
       role: user.role,
+      can_access_monitoring: (user as any).can_access_monitoring || user.role === 'ADMIN',
     };
 
     const response = NextResponse.json({

@@ -50,3 +50,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+# IDE / Editor styles
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS config
+Thumbs.db
