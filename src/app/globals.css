@@ -158,6 +158,18 @@ html, body {
   margin-bottom: 18px;
 }
 
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
 .form-group label {
   display: block;
   font-size: 12px;
@@ -627,6 +639,12 @@ html, body {
   border-color: var(--accent-blue);
   background: #ffffff;
   box-shadow: 0 0 0 1px var(--accent-blue);
+}
+
+.data-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .data-table {
@@ -1220,6 +1238,13 @@ html, body {
   }
 }
 
+@media (max-width: 600px) {
+  .form-grid-2,
+  .form-grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 480px) {
   .stats-grid {
     grid-template-columns: 1fr;
@@ -1228,5 +1253,11 @@ html, body {
   .login-card {
     margin: 16px;
     padding: 24px;
+  }
+
+  .modal-content {
+    margin: 16px;
+    padding: 20px;
+    width: calc(100% - 32px);
   }
 }

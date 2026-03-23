@@ -184,44 +184,46 @@ export default function DashboardMainPage() {
             <h2 className="table-title">My Recent Tasks</h2>
             <p className="page-subtitle" style={{ margin: 0 }}>Showing your currently assigned tasks</p>
           </div>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Priority</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.length === 0 ? (
-                <tr><td colSpan={4} style={{ textAlign: 'center', padding: '32px' }}>No tasks assigned to you</td></tr>
-              ) : (
-                tasks.slice(0, 5).map(task => (
-                  <tr key={task.id}>
-                    <td>
-                      <div style={{ fontWeight: 500 }}>{task.title}</div>
-                      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{task.description}</div>
-                    </td>
-                    <td>
-                      <select
-                        className={`status-select ${getStatusClass(task.status)}`}
-                        value={task.status}
-                        onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                      >
-                        <option value="TODO">To Do</option>
-                        <option value="IN_PROGRESS">In Progress</option>
-                        <option value="BLOCKER">Blocker</option>
-                        <option value="DONE">Done</option>
-                      </select>
-                    </td>
-                    <td><span className={`priority-badge priority-${task.priority.toLowerCase()}`}>{task.priority}</span></td>
-                    <td>{new Date(task.createdAt).toLocaleDateString()}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Title</th>
+                  <th>Status</th>
+                  <th>Priority</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tasks.length === 0 ? (
+                  <tr><td colSpan={4} style={{ textAlign: 'center', padding: '32px' }}>No tasks assigned to you</td></tr>
+                ) : (
+                  tasks.slice(0, 5).map(task => (
+                    <tr key={task.id}>
+                      <td>
+                        <div style={{ fontWeight: 500 }}>{task.title}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{task.description}</div>
+                      </td>
+                      <td>
+                        <select
+                          className={`status-select ${getStatusClass(task.status)}`}
+                          value={task.status}
+                          onChange={(e) => handleStatusChange(task.id, e.target.value)}
+                        >
+                          <option value="TODO">To Do</option>
+                          <option value="IN_PROGRESS">In Progress</option>
+                          <option value="BLOCKER">Blocker</option>
+                          <option value="DONE">Done</option>
+                        </select>
+                      </td>
+                      <td><span className={`priority-badge priority-${task.priority.toLowerCase()}`}>{task.priority}</span></td>
+                      <td>{new Date(task.createdAt).toLocaleDateString()}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </>

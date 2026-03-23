@@ -135,26 +135,28 @@ export default function DashboardLayout({
                 >
                   🔔
                   {visibleNotifications.some(n => !n.isRead) && (
-                    <span style={{ position: 'absolute', top: '0', right: '0', background: 'var(--accent-red)', borderRadius: '50%', width: '10px', height: '10px', display: 'block' }}></span>
+                    <span style={{ position: 'absolute', top: '-2px', right: '-2px', background: 'var(--accent-red)', color: 'white', fontSize: '9px', fontWeight: 'bold', minWidth: '16px', height: '16px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                      {visibleNotifications.filter(n => !n.isRead).length}
+                    </span>
                   )}
                 </button>
                 {showNotifications && (
-                  <div className="card" style={{ position: 'absolute', top: '35px', left: '0', width: '250px', zIndex: 100, maxHeight: '300px', overflowY: 'auto', padding: '10px', border: '1px solid var(--border-subtle)', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
-                    <div style={{ fontWeight: 600, fontSize: '12px', marginBottom: '8px', paddingBottom: '5px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>Notifications</span>
+                  <div className="card" style={{ position: 'absolute', top: '40px', left: '0', width: '280px', zIndex: 100, maxHeight: '350px', overflowY: 'auto', padding: '12px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-lg)' }}>
+                    <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-primary)' }}>
+                      <span>Notifikasi Terbaru</span>
                       {visibleNotifications.length > 0 && (
                         <button 
                           onClick={() => {
                             setHiddenNotifications(new Set([...hiddenNotifications, ...visibleNotifications.map(n => n.id)]));
                           }} 
-                          style={{ background: 'none', border: 'none', fontSize: '10px', color: 'var(--accent-blue)', cursor: 'pointer' }}
+                          style={{ background: 'none', border: 'none', fontSize: '11px', color: 'var(--accent-blue)', cursor: 'pointer', fontWeight: 600 }}
                         >
                           Clear All
                         </button>
                       )}
                     </div>
                     {visibleNotifications.length === 0 ? (
-                      <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', textAlign: 'center', padding: '10px' }}>No notifications</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', textAlign: 'center', padding: '16px 10px' }}>Tidak ada notifikasi</div>
                     ) : (
                       visibleNotifications.map(n => (
                         <div 
@@ -177,14 +179,30 @@ export default function DashboardLayout({
                             }
                             setShowNotifications(false);
                           }}
-                          style={{ padding: '8px', fontSize: '11px', cursor: 'pointer', borderBottom: '1px solid var(--border-subtle)', background: n.isRead ? 'transparent' : 'rgba(25, 118, 210, 0.05)', borderRadius: '4px', marginBottom: '4px' }}
+                          style={{ 
+                            padding: '10px 10px 10px 24px', 
+                            fontSize: '12px', 
+                            cursor: 'pointer', 
+                            borderBottom: '1px solid var(--border-subtle)', 
+                            background: n.isRead ? 'transparent' : 'var(--accent-blue-light)', 
+                            borderRadius: '6px', 
+                            marginBottom: '6px',
+                            color: n.isRead ? 'var(--text-secondary)' : 'var(--text-primary)',
+                            fontWeight: n.isRead ? 400 : 500,
+                            position: 'relative',
+                            transition: 'var(--transition-fast)'
+                          }}
                         >
-                          {n.message}
-                          <div style={{ fontSize: '9px', color: 'var(--text-tertiary)', marginTop: '2px' }}>{new Date(n.createdAt).toLocaleTimeString()}</div>
+                          {!n.isRead && (
+                            <span style={{ position: 'absolute', left: '8px', top: '15px', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-blue)' }} />
+                          )}
+                          <div style={{ lineHeight: '1.4' }}>{n.message}</div>
+                          <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '4px', fontWeight: 400 }}>{new Date(n.createdAt).toLocaleString()}</div>
                         </div>
                       ))
                     )}
                   </div>
+
                 )}
               </div>
             )}
@@ -239,9 +257,9 @@ export default function DashboardLayout({
                 </Link>
               </>
             )}
-            <Link href="/dashboard/game" className={`sidebar-link ${pathname === '/dashboard/game' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+            {/* <Link href="/dashboard/game" className={`sidebar-link ${pathname === '/dashboard/game' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
               <span className="icon">🎮</span> Mini Game
-            </Link>
+            </Link> */}
           </nav>
           <div className="sidebar-footer">
             <div className="sidebar-user">

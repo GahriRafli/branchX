@@ -27,10 +27,12 @@ export default function MonitoringPage() {
   const [loading, setLoading] = useState(true); // Kept original loading state
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof MonitoringData, direction: 'asc' | 'desc' } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // CRUD State
   const [showModal, setShowModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
+  const [bulkActionConfirm, setBulkActionConfirm] = useState<{ action: 'VERIFY' | 'REJECT' | 'DELETE', count: number } | null>(null);
   const [editingEntry, setEditingEntry] = useState<MonitoringData | null>(null);
   const [form, setForm] = useState({ name: '', codeReferral: '', noAccount: '', product: '', amount: '0', target: '0', total: '0' });
   const [error, setError] = useState('');
@@ -112,6 +114,57 @@ export default function MonitoringPage() {
       setShowDeleteModal(null);
       fetchData();
     }
+  };
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedIds(new Set(filteredData.map(item => item.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleSelect = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const handleBulkVerify = () => {
+    setBulkActionConfirm({ action: 'VERIFY', count: selectedIds.size });
+  };
+
+  const handleBulkReject = () => {
+    setBulkActionConfirm({ action: 'REJECT', count: selectedIds.size });
+  };
+
+  const handleBulkDelete = () => {
+    setBulkActionConfirm({ action: 'DELETE', count: selectedIds.size });
+  };
+
+  const executeBulkAction = async () => {
+    if (!bulkActionConfirm) return;
+    setLoading(true);
+    if (bulkActionConfirm.action === 'DELETE') {
+      await Promise.all(Array.from(selectedIds).map(id =>
+        fetch(`/api/monitoring?id=${id}`, { method: 'DELETE' })
+      ));
+    } else {
+      await Promise.all(Array.from(selectedIds).map(id =>
+        fetch('/api/monitoring', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, status: bulkActionConfirm.action === 'VERIFY' ? 'VERIFIED' : 'REJECTED' }),
+        })
+      ));
+    }
+    setSelectedIds(new Set());
+    setBulkActionConfirm(null);
+    fetchData();
   };
 
   const filteredData = useMemo(() => {
@@ -248,7 +301,17 @@ export default function MonitoringPage() {
 
       <div className="card" style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', background: 'var(--bg-card)', overflow: 'hidden' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: '15px' }}>{isAdmin ? 'Seluruh Data GMM' : 'Riwayat Input Saya'}</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <h3 style={{ margin: 0, fontSize: '15px' }}>{isAdmin ? 'Seluruh Data GMM' : 'Riwayat Input Saya'}</h3>
+            {isAdmin && selectedIds.size > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 12px', background: 'var(--bg-primary)', borderRadius: '20px', border: '1px solid var(--border-default)' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>{selectedIds.size} dipilih:</span>
+                <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: '11px', background: 'var(--accent-green)', color: 'white', border: 'none' }} onClick={handleBulkVerify}>Verify</button>
+                <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: '11px', background: 'var(--accent-red)', color: 'white', border: 'none' }} onClick={handleBulkReject}>Reject</button>
+                <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: '11px', background: 'transparent', color: 'var(--accent-red)', border: '1px solid var(--accent-red)' }} onClick={handleBulkDelete}>Delete</button>
+              </div>
+            )}
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button 
               className="btn btn-primary btn-sm" 
@@ -291,76 +354,97 @@ export default function MonitoringPage() {
           </div>
         </div>
         <div className="table-container" style={{ margin: 0, border: 'none', borderRadius: 0 }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th onClick={() => handleSort('name')}>Nama Employee {sortConfig?.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                <th onClick={() => handleSort('codeReferral')}>Code Refferal {sortConfig?.key === 'codeReferral' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                <th onClick={() => handleSort('noAccount')}>No Account {sortConfig?.key === 'noAccount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                <th onClick={() => handleSort('product')}>Product {sortConfig?.key === 'product' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                <th onClick={() => handleSort('amount')}>Amount {sortConfig?.key === 'amount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                <th onClick={() => handleSort('target')}>Target {sortConfig?.key === 'target' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                <th onClick={() => handleSort('status')}>Status {sortConfig?.key === 'status' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredData.map(item => (
-                <tr key={item.id}>
-                  <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.name}</td>
-                  <td><code>{item.codeReferral}</code></td>
-                  <td>{item.noAccount}</td>
-                  <td><span className="status-badge status-todo" style={{ background: 'var(--bg-primary)' }}>{item.product}</span></td>
-                  <td style={{ fontWeight: 500 }}>{item.amount.toLocaleString()}</td>
-                  <td>{item.target.toLocaleString()}</td>
-                  <td>
-                    <span 
-                      className={`status-badge ${item.status === 'VERIFIED' ? 'status-done' : item.status === 'REJECTED' ? 'status-rejected' : 'status-in-progress'}`}
-                    >
-                      {item.status}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      {isAdmin && item.status === 'PENDING' && (
-                        <>
-                          <button className="btn btn-primary btn-sm" onClick={() => handleVerify(item.id)}>Verify</button>
-                          <button className="btn btn-danger btn-sm" onClick={() => handleReject(item.id)} style={{ padding: '0 12px' }}>Reject</button>
-                        </>
-                      )}
-                      {(isAdmin || item.status === 'PENDING') && (
-                        <button className="btn btn-secondary btn-sm" onClick={() => {
-                          setEditingEntry(item);
-                          setForm({ 
-                            name: item.name, 
-                            codeReferral: item.codeReferral, 
-                            noAccount: item.noAccount,
-                            product: item.product, 
-                            amount: item.amount.toString(), 
-                            target: item.target.toString(), 
-                            total: item.total.toString() 
-                          });
-                          setShowModal(true);
-                        }}>Edit</button>
-                      )}
-                      {isAdmin && (
-                        <button className="btn btn-danger btn-sm" onClick={() => setShowDeleteModal(item.id)}>Delete</button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredData.length === 0 && (
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-tertiary)' }}>
-                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>🔍</div>
-                    Belum ada data
-                  </td>
+                  {isAdmin && (
+                    <th style={{ width: '40px', textAlign: 'center' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={filteredData.length > 0 && selectedIds.size === filteredData.length}
+                        onChange={handleSelectAll}
+                      />
+                    </th>
+                  )}
+                  <th onClick={() => handleSort('name')}>Nama Employee {sortConfig?.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                  <th onClick={() => handleSort('codeReferral')}>Code Refferal {sortConfig?.key === 'codeReferral' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                  <th onClick={() => handleSort('noAccount')}>No Account {sortConfig?.key === 'noAccount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                  <th onClick={() => handleSort('product')}>Product {sortConfig?.key === 'product' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                  <th onClick={() => handleSort('amount')}>Amount {sortConfig?.key === 'amount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                  <th onClick={() => handleSort('target')}>Target {sortConfig?.key === 'target' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                  <th onClick={() => handleSort('status')}>Status {sortConfig?.key === 'status' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                  <th>Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredData.map(item => (
+                  <tr key={item.id} style={{ background: selectedIds.has(item.id) ? 'var(--bg-primary)' : 'transparent' }}>
+                    {isAdmin && (
+                      <td style={{ textAlign: 'center' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedIds.has(item.id)}
+                          onChange={() => handleSelect(item.id)}
+                        />
+                      </td>
+                    )}
+                    <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.name}</td>
+                    <td><code>{item.codeReferral}</code></td>
+                    <td>{item.noAccount}</td>
+                    <td><span className="status-badge status-todo" style={{ background: 'var(--bg-primary)' }}>{item.product}</span></td>
+                    <td style={{ fontWeight: 500 }}>{item.amount.toLocaleString()}</td>
+                    <td>{item.target.toLocaleString()}</td>
+                    <td>
+                      <span 
+                        className={`status-badge ${item.status === 'VERIFIED' ? 'status-done' : item.status === 'REJECTED' ? 'status-rejected' : 'status-in-progress'}`}
+                      >
+                        {item.status}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        {isAdmin && item.status === 'PENDING' && (
+                          <>
+                            <button className="btn btn-primary btn-sm" onClick={() => handleVerify(item.id)}>Verify</button>
+                            <button className="btn btn-danger btn-sm" onClick={() => handleReject(item.id)} style={{ padding: '0 12px' }}>Reject</button>
+                          </>
+                        )}
+                        {(isAdmin || item.status === 'PENDING') && (
+                          <button className="btn btn-secondary btn-sm" onClick={() => {
+                            setEditingEntry(item);
+                            setForm({ 
+                              name: item.name, 
+                              codeReferral: item.codeReferral, 
+                              noAccount: item.noAccount,
+                              product: item.product, 
+                              amount: item.amount.toString(), 
+                              target: item.target.toString(), 
+                              total: item.total.toString() 
+                            });
+                            setShowModal(true);
+                          }}>Edit</button>
+                        )}
+                        {isAdmin && (
+                          <button className="btn btn-danger btn-sm" onClick={() => setShowDeleteModal(item.id)}>Delete</button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredData.length === 0 && (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-tertiary)' }}>
+                      <div style={{ fontSize: '24px', marginBottom: '8px' }}>🔍</div>
+                      Belum ada data
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
+
       </div>
 
       {showModal && (
@@ -382,7 +466,7 @@ export default function MonitoringPage() {
                 <label>Nama Employee</label>
                 <input className="form-input" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required readOnly={!isAdmin} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-grid-2">
                 <div className="form-group">
                   <label>Code Refferal</label>
                   <input className="form-input" value={form.codeReferral} onChange={e => setForm({...form, codeReferral: e.target.value})} required />
@@ -399,7 +483,7 @@ export default function MonitoringPage() {
                 <label>Produk</label>
                 <input className="form-input" value={form.product} onChange={e => setForm({...form, product: e.target.value})} required />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+              <div className="form-grid-3">
                 <div className="form-group">
                   <label>Amount</label>
                   <input type="number" min="0" className="form-input" value={form.amount} onChange={e => {
@@ -437,6 +521,32 @@ export default function MonitoringPage() {
             <div className="modal-actions" style={{ justifyContent: 'center' }}>
               <button className="btn btn-secondary" onClick={() => setShowDeleteModal(null)}>Batal</button>
               <button className="btn btn-danger" onClick={confirmDelete}>Hapus Permanen</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Buk Action Confirmation Modal */}
+      {bulkActionConfirm && (
+        <div className="modal-overlay" onClick={() => setBulkActionConfirm(null)}>
+          <div className="modal-content" style={{ maxWidth: '400px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>
+              {bulkActionConfirm.action === 'DELETE' ? '⚠️' : bulkActionConfirm.action === 'VERIFY' ? '✅' : '❌'}
+            </div>
+            <h2 className="modal-title">Konfirmasi {bulkActionConfirm.action === 'DELETE' ? 'Penghapusan' : bulkActionConfirm.action === 'VERIFY' ? 'Verifikasi' : 'Penolakan'}</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>
+              Apakah Anda yakin ingin {bulkActionConfirm.action === 'DELETE' ? 'menghapus secara permanen' : bulkActionConfirm.action === 'VERIFY' ? 'memverifikasi' : 'menolak'} <strong>{bulkActionConfirm.count} data</strong> sekaligus?
+            </p>
+            <div className="modal-actions" style={{ justifyContent: 'center' }}>
+              <button className="btn btn-secondary" disabled={loading} onClick={() => setBulkActionConfirm(null)}>Batal</button>
+              <button 
+                className={`btn ${bulkActionConfirm.action === 'DELETE' || bulkActionConfirm.action === 'REJECT' ? 'btn-danger' : 'btn-primary'}`} 
+                disabled={loading}
+                onClick={executeBulkAction}
+                style={bulkActionConfirm.action === 'VERIFY' ? { background: 'var(--accent-green)' } : {}}
+              >
+                {loading ? 'Memproses...' : 'Ya, Lanjutkan'}
+              </button>
             </div>
           </div>
         </div>

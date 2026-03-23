@@ -51,6 +51,8 @@ function TasksPageContent() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [taskForm, setTaskForm] = useState({ title: '', description: '', priority: 'MEDIUM', status: 'TODO', assigneeId: '' });
   const [assignModal, setAssignModal] = useState<{ taskId: string; currentAssigneeId: string | null } | null>(null);
+  const [bulkDeleteModal, setBulkDeleteModal] = useState<boolean>(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const s = searchParams.get('status');
@@ -159,6 +161,63 @@ function TasksPageContent() {
     fetchData();
   };
 
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedTaskIds(new Set(paginatedTasks.map(task => task.id)));
+    } else {
+      setSelectedTaskIds(new Set());
+    }
+  };
+
+  const handleSelect = (id: string) => {
+    const newSet = new Set(selectedTaskIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedTaskIds(newSet);
+  };
+
+  const handleBulkDelete = async () => {
+    setLoading(true);
+    await Promise.all(Array.from(selectedTaskIds).map(id =>
+      fetch(`/api/tasks?id=${id}`, { method: 'DELETE' })
+    ));
+    setSelectedTaskIds(new Set());
+    setBulkDeleteModal(false);
+    fetchData();
+  };
+
+  const handleBulkStatusUpdate = async (newStatus: string) => {
+    if (!newStatus) return;
+    setLoading(true);
+    await Promise.all(Array.from(selectedTaskIds).map(id =>
+      fetch('/api/tasks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: newStatus }),
+      })
+    ));
+    setSelectedTaskIds(new Set());
+    fetchData();
+  };
+
+  const handleBulkAssign = async (assigneeId: string) => {
+    if (!assigneeId) return;
+    const payloadAssigneeId = assigneeId === 'unassigned' ? null : assigneeId;
+    setLoading(true);
+    await Promise.all(Array.from(selectedTaskIds).map(id =>
+      fetch('/api/tasks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, assigneeId: payloadAssigneeId }),
+      })
+    ));
+    setSelectedTaskIds(new Set());
+    fetchData();
+  };
+
   const handleExport = (format: 'excel' | 'csv') => {
     const dataToExport = filteredTasks.map(t => ({
       Title: t.title,
@@ -212,7 +271,45 @@ function TasksPageContent() {
 
       <div className="table-container">
         <div className="table-header">
-          <div className="table-title">Task Manager</div>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <div className="table-title">Task Manager</div>
+            {selectedTaskIds.size > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 12px', background: 'var(--bg-primary)', borderRadius: '20px', border: '1px solid var(--border-default)', marginLeft: '16px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>{selectedTaskIds.size} selected:</span>
+                <select 
+                  style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}
+                  onChange={(e) => {
+                    if(e.target.value) handleBulkStatusUpdate(e.target.value);
+                    e.target.value = '';
+                  }}
+                >
+                  <option value="">Update Status...</option>
+                  <option value="TODO">To Do</option>
+                  <option value="IN_PROGRESS">In Progress</option>
+                  <option value="BLOCKER">Blocker</option>
+                  <option value="DONE">Done</option>
+                </select>
+                {isAdmin && (
+                  <select 
+                    style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}
+                    onChange={(e) => {
+                      if(e.target.value) handleBulkAssign(e.target.value);
+                      e.target.value = '';
+                    }}
+                  >
+                    <option value="">Assign to...</option>
+                    <option value="unassigned">Unassigned</option>
+                    {users.filter(u => u.role !== 'ADMIN').map(u => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                )}
+                {isAdmin && (
+                  <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: '11px', background: 'transparent', color: 'var(--accent-red)', border: '1px solid var(--accent-red)' }} onClick={() => setBulkDeleteModal(true)}>Delete All</button>
+                )}
+              </div>
+            )}
+          </div>
           <div className="table-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button className="btn btn-excel btn-sm" onClick={() => handleExport('excel')}>
               <span>📊</span> Export Excel
@@ -252,6 +349,13 @@ function TasksPageContent() {
           <table className="data-table">
             <thead>
                 <tr>
+                  <th style={{ width: '40px', textAlign: 'center' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={paginatedTasks.length > 0 && selectedTaskIds.size === paginatedTasks.length}
+                      onChange={handleSelectAll}
+                    />
+                  </th>
                   <th onClick={() => handleSort('title')} style={{ cursor: 'pointer' }}>
                     Title {sortField === 'title' && (sortOrder === 'asc' ? '↑' : '↓')}
                   </th>
@@ -274,7 +378,14 @@ function TasksPageContent() {
             </thead>
             <tbody>
               {paginatedTasks.map(task => (
-                <tr key={task.id}>
+                <tr key={task.id} style={{ background: selectedTaskIds.has(task.id) ? 'var(--bg-primary)' : 'transparent' }}>
+                  <td style={{ textAlign: 'center' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={selectedTaskIds.has(task.id)}
+                      onChange={() => handleSelect(task.id)}
+                    />
+                  </td>
                   <td>
                     <div style={{ fontWeight: 500 }}>{task.title}</div>
                     <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{task.description}</div>
@@ -360,7 +471,7 @@ function TasksPageContent() {
                 <label>Description</label>
                 <textarea className="form-input" value={taskForm.description} onChange={e => setTaskForm({...taskForm, description: e.target.value})} />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div className="form-grid-2">
                 <div className="form-group">
                     <label>Priority</label>
                     <select className="form-select" value={taskForm.priority} onChange={e => setTaskForm({...taskForm, priority: e.target.value})}>
@@ -431,6 +542,21 @@ function TasksPageContent() {
             <div className="modal-actions" style={{ justifyContent: 'center' }}>
               <button className="btn btn-secondary" onClick={() => setShowDeleteModal(null)}>Cancel</button>
               <button className="btn btn-danger" onClick={handleDelete}>Delete Permanently</button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Bulk Delete Modal */}
+      {bulkDeleteModal && (
+        <div className="modal-overlay" onClick={() => setBulkDeleteModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '400px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: '48px', color: 'var(--accent-red)', marginBottom: '16px' }}>⚠️</div>
+            <h2 className="modal-title">Hapus Massal</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>Are you sure you want to delete <strong>{selectedTaskIds.size} tasks</strong> simultaneously? This action cannot be undone.</p>
+            <div className="modal-actions" style={{ justifyContent: 'center' }}>
+              <button className="btn btn-secondary" onClick={() => setBulkDeleteModal(false)} disabled={loading}>Cancel</button>
+              <button className="btn btn-danger" onClick={handleBulkDelete} disabled={loading}>{loading ? 'Deleting...' : 'Delete All Permanently'}</button>
             </div>
           </div>
         </div>
