@@ -1,4 +1,5 @@
 'use client';
+import Pagination from '@/components/Pagination';
 
 import { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -25,7 +26,7 @@ interface UserListItem {
 }
 
 function TasksPageContent() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, showToast } = useAuth();
   const searchParams = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [users, setUsers] = useState<UserListItem[]>([]);
@@ -124,41 +125,41 @@ function TasksPageContent() {
       setSortOrder('asc');
     }
   };
-
-  const getPaginationGroup = () => {
-    let start = Math.max(page - 2, 1);
-    let end = Math.min(start + 4, totalPages);
-    if (end - start < 4) start = Math.max(end - 4, 1);
-    
-    const pages = [];
-    for (let i = start; i <= end; i++) pages.push(i);
-    return pages;
-  };
-
   const handleStatusChange = async (taskId: string, newStatus: string) => {
-    await fetch('/api/tasks', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: taskId, status: newStatus }),
-    });
-    fetchData();
+    try {
+      await fetch('/api/tasks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: taskId, status: newStatus }),
+      });
+      fetchData();
+      showToast('Status Updated', `Task status changed to ${newStatus}`);
+    } catch {
+      showToast('Error', 'Failed to update task status', 'error');
+    }
   };
 
   const handleAssign = async (taskId: string, assigneeId: string | null) => {
-    await fetch('/api/tasks', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: taskId, assigneeId }),
-    });
-    setAssignModal(null);
-    fetchData();
+    try {
+      await fetch('/api/tasks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: taskId, assigneeId }),
+      });
+      setAssignModal(null);
+      fetchData();
+      showToast('Assigned', 'Task assignment updated successfully');
+    } catch { showToast('Error', 'Failed to assign task', 'error'); }
   };
 
   const handleDelete = async () => {
     if (!showDeleteModal) return;
-    await fetch(`/api/tasks?id=${showDeleteModal}`, { method: 'DELETE' });
-    setShowDeleteModal(null);
-    fetchData();
+    try {
+      await fetch(`/api/tasks?id=${showDeleteModal}`, { method: 'DELETE' });
+      setShowDeleteModal(null);
+      fetchData();
+      showToast('Task Deleted', 'The task has been deleted.', 'warning');
+    } catch { showToast('Error', 'Failed to delete task', 'error'); }
   };
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -181,41 +182,50 @@ function TasksPageContent() {
 
   const handleBulkDelete = async () => {
     setLoading(true);
-    await Promise.all(Array.from(selectedTaskIds).map(id =>
-      fetch(`/api/tasks?id=${id}`, { method: 'DELETE' })
-    ));
-    setSelectedTaskIds(new Set());
-    setBulkDeleteModal(false);
-    fetchData();
+    try {
+      await Promise.all(Array.from(selectedTaskIds).map(id =>
+        fetch(`/api/tasks?id=${id}`, { method: 'DELETE' })
+      ));
+      showToast('Bulk Delete', `${selectedTaskIds.size} tasks have been deleted.`, 'warning');
+      setSelectedTaskIds(new Set());
+      setBulkDeleteModal(false);
+      fetchData();
+    } catch { showToast('Error', 'Failed to delete tasks', 'error'); setLoading(false); }
   };
 
   const handleBulkStatusUpdate = async (newStatus: string) => {
     if (!newStatus) return;
     setLoading(true);
-    await Promise.all(Array.from(selectedTaskIds).map(id =>
-      fetch('/api/tasks', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status: newStatus }),
-      })
-    ));
-    setSelectedTaskIds(new Set());
-    fetchData();
+    try {
+      await Promise.all(Array.from(selectedTaskIds).map(id =>
+        fetch('/api/tasks', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, status: newStatus }),
+        })
+      ));
+      showToast('Bulk Update', `Status of ${selectedTaskIds.size} tasks updated to ${newStatus}.`);
+      setSelectedTaskIds(new Set());
+      fetchData();
+    } catch { showToast('Error', 'Failed to update tasks', 'error'); setLoading(false); }
   };
 
   const handleBulkAssign = async (assigneeId: string) => {
     if (!assigneeId) return;
     const payloadAssigneeId = assigneeId === 'unassigned' ? null : assigneeId;
     setLoading(true);
-    await Promise.all(Array.from(selectedTaskIds).map(id =>
-      fetch('/api/tasks', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, assigneeId: payloadAssigneeId }),
-      })
-    ));
-    setSelectedTaskIds(new Set());
-    fetchData();
+    try {
+      await Promise.all(Array.from(selectedTaskIds).map(id =>
+        fetch('/api/tasks', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, assigneeId: payloadAssigneeId }),
+        })
+      ));
+      showToast('Bulk Assign', `${selectedTaskIds.size} tasks assigned successfully.`);
+      setSelectedTaskIds(new Set());
+      fetchData();
+    } catch { showToast('Error', 'Failed to assign tasks', 'error'); setLoading(false); }
   };
 
   const handleExport = (format: 'excel' | 'csv') => {
@@ -246,16 +256,19 @@ function TasksPageContent() {
     if (editingTask) body.id = editingTask.id;
     if (body.assigneeId === '') body.assigneeId = null;
 
-    const res = await fetch('/api/tasks', {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    try {
+      const res = await fetch('/api/tasks', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
 
-    if (res.ok) {
-      setShowTaskModal(false);
-      fetchData();
-    }
+      if (res.ok) {
+        setShowTaskModal(false);
+        fetchData();
+        showToast('Success', editingTask ? 'Task updated successfully' : 'New task created successfully');
+      } else throw new Error();
+    } catch { showToast('Error', 'Failed to save task', 'error'); }
   };
 
   if (loading) return <div className="loading-spinner" />;
@@ -427,34 +440,14 @@ function TasksPageContent() {
           </table>
         </div>
         
-        {totalPages > 1 && (
-            <div className="pagination">
-              <div className="pagination-info">
-                Showing <strong>{(page-1)*pageSize + 1}</strong> to <strong>{Math.min(page*pageSize, filteredTasks.length)}</strong> of <strong>{filteredTasks.length}</strong> tasks
-              </div>
-              <div className="pagination-numbers">
-                <button className="pagination-btn" disabled={page === 1} onClick={() => setPage(1)}>First</button>
-                <button className="pagination-btn" disabled={page === 1} onClick={() => setPage(p => p - 1)}>&laquo; Prev</button>
-                
-                {page > 3 && totalPages > 5 && <span className="pagination-ellipsis">...</span>}
-                
-                {getPaginationGroup().map(item => (
-                  <button
-                    key={item}
-                    onClick={() => setPage(item)}
-                    className={`pagination-btn ${page === item ? 'active' : ''}`}
-                  >
-                    {item}
-                  </button>
-                ))}
-
-                {page < totalPages - 2 && totalPages > 5 && <span className="pagination-ellipsis">...</span>}
-
-                <button className="pagination-btn" disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>Next &raquo;</button>
-                <button className="pagination-btn" disabled={page === totalPages} onClick={() => setPage(totalPages)}>Last</button>
-              </div>
-            </div>
-        )}
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          totalItems={filteredTasks.length}
+          itemsPerPage={pageSize}
+          itemName="tasks"
+        />
       </div>
 
       {/* Task Modal */}

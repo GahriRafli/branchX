@@ -1,4 +1,5 @@
 'use client';
+import Pagination from '@/components/Pagination';
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../layout';
@@ -21,13 +22,19 @@ interface MonitoringData {
 }
 
 export default function MonitoringPage() {
-  const { user, loading: authLoading, isAdmin } = useAuth();
+  const { user, loading: authLoading, isAdmin, showToast } = useAuth();
   const router = useRouter();
   const [data, setData] = useState<MonitoringData[]>([]);
   const [loading, setLoading] = useState(true); // Kept original loading state
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof MonitoringData, direction: 'asc' | 'desc' } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
 
   // CRUD State
   const [showModal, setShowModal] = useState(false);
@@ -81,47 +88,65 @@ export default function MonitoringPage() {
     if (res.ok) {
       setShowModal(false);
       fetchData();
+      showToast('Success', editingEntry ? 'Entry updated successfully' : 'New entry saved successfully');
     } else {
       const d = await res.json();
       setError(d.error || 'Failed to save entry');
       if (d.details) setErrorDetails(d.details);
+      showToast('Error', d.error || 'Failed to save entry', 'error');
       console.error('Save error:', d);
     }
   };
 
   const handleVerify = async (id: string) => {
-    const res = await fetch('/api/monitoring', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status: 'VERIFIED' }),
-    });
-    if (res.ok) fetchData();
+    try {
+      const res = await fetch('/api/monitoring', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: 'VERIFIED' }),
+      });
+      if (res.ok) { fetchData(); showToast('Verified', 'Entry verified successfully'); }
+      else throw new Error();
+    } catch { showToast('Error', 'Failed to verify entry', 'error'); }
   };
 
   const handleReject = async (id: string) => {
-    const res = await fetch('/api/monitoring', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status: 'REJECTED' }),
-    });
-    if (res.ok) fetchData();
+    try {
+      const res = await fetch('/api/monitoring', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status: 'REJECTED' }),
+      });
+      if (res.ok) { fetchData(); showToast('Rejected', 'Entry rejected', 'warning'); }
+      else throw new Error();
+    } catch { showToast('Error', 'Failed to reject entry', 'error'); }
   };
 
   const confirmDelete = async () => {
     if (!showDeleteModal) return;
-    const res = await fetch(`/api/monitoring?id=${showDeleteModal}`, { method: 'DELETE' });
-    if (res.ok) {
-      setShowDeleteModal(null);
-      fetchData();
-    }
+    try {
+      const res = await fetch(`/api/monitoring?id=${showDeleteModal}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDeleteModal(null);
+        fetchData();
+        showToast('Deleted', 'Entry deleted successfully', 'warning');
+      } else throw new Error();
+    } catch { showToast('Error', 'Failed to delete entry', 'error'); }
   };
 
+  // Note: paginatedData will be defined below filteredData, but we can't reference it here yet.
+  // We'll update handleSelectAll slightly later manually if needed, or we just reconstruct paginated array logic here.
+
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedIds(new Set(filteredData.map(item => item.id)));
-    } else {
-      setSelectedIds(new Set());
-    }
+    // Quick calculation for current page data
+    const sorted = [...data].filter(item => 
+      item.name.toLowerCase().includes(search.toLowerCase()) ||
+      item.codeReferral.toLowerCase().includes(search.toLowerCase()) ||
+      item.noAccount.includes(search)
+    ).sort((a, b) => {
+      // (simplified sort for select all isn't perfect, we can instead move filteredData/paginatedData up or move this function down)
+      return 0; // We'll redefine handleSelectAll below filteredData to have access to paginatedData
+    });
   };
 
   const handleSelect = (id: string) => {
@@ -149,22 +174,28 @@ export default function MonitoringPage() {
   const executeBulkAction = async () => {
     if (!bulkActionConfirm) return;
     setLoading(true);
-    if (bulkActionConfirm.action === 'DELETE') {
-      await Promise.all(Array.from(selectedIds).map(id =>
-        fetch(`/api/monitoring?id=${id}`, { method: 'DELETE' })
-      ));
-    } else {
-      await Promise.all(Array.from(selectedIds).map(id =>
-        fetch('/api/monitoring', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id, status: bulkActionConfirm.action === 'VERIFY' ? 'VERIFIED' : 'REJECTED' }),
-        })
-      ));
+    try {
+      if (bulkActionConfirm.action === 'DELETE') {
+        await Promise.all(Array.from(selectedIds).map(id =>
+          fetch(`/api/monitoring?id=${id}`, { method: 'DELETE' })
+        ));
+      } else {
+        await Promise.all(Array.from(selectedIds).map(id =>
+          fetch('/api/monitoring', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, status: bulkActionConfirm.action === 'VERIFY' ? 'VERIFIED' : 'REJECTED' }),
+          })
+        ));
+      }
+      showToast(`Bulk ${bulkActionConfirm.action}`, `${selectedIds.size} entries processed successfully.`, bulkActionConfirm.action === 'DELETE' || bulkActionConfirm.action === 'REJECT' ? 'warning' : 'success');
+      setSelectedIds(new Set());
+      setBulkActionConfirm(null);
+      fetchData();
+    } catch {
+      showToast('Error', `Failed to execute bulk ${bulkActionConfirm.action.toLowerCase()}`, 'error');
+      setLoading(false);
     }
-    setSelectedIds(new Set());
-    setBulkActionConfirm(null);
-    fetchData();
   };
 
   const filteredData = useMemo(() => {
@@ -185,8 +216,24 @@ export default function MonitoringPage() {
     return result;
   }, [data, search, sortConfig]);
 
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+  const paginatedData = useMemo(() => {
+    return filteredData.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
+  }, [filteredData, currentPage]);
+
+  const handleSelectAllPaginated = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedIds(new Set(paginatedData.map(item => item.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
   const stats = useMemo(() => {
-    const totalAmount = data.reduce((sum, item) => sum + item.amount, 0);
+    const totalAmount = data.reduce((sum, item) => item.status !== 'REJECTED' ? sum + item.amount : sum, 0);
     const totalTarget = data.reduce((sum, item) => sum + item.target, 0);
     const achievement = totalTarget > 0 ? (totalAmount / totalTarget) * 100 : 0;
     // Count unique products
@@ -205,9 +252,13 @@ export default function MonitoringPage() {
       if (!acc[item.name]) {
         acc[item.name] = { ...item, amount: 0, target: 0, total: 0 };
       }
-      acc[item.name].amount += item.amount;
+      
+      if (item.status !== 'REJECTED') {
+        acc[item.name].amount += item.amount;
+        acc[item.name].total += item.total;
+      }
+      
       acc[item.name].target += item.target;
-      acc[item.name].total += item.total;
       return acc;
     }, {});
     return Object.values(grouped);
@@ -362,8 +413,8 @@ export default function MonitoringPage() {
                     <th style={{ width: '40px', textAlign: 'center' }}>
                       <input 
                         type="checkbox" 
-                        checked={filteredData.length > 0 && selectedIds.size === filteredData.length}
-                        onChange={handleSelectAll}
+                        checked={paginatedData.length > 0 && selectedIds.size === paginatedData.length}
+                        onChange={handleSelectAllPaginated}
                       />
                     </th>
                   )}
@@ -378,7 +429,7 @@ export default function MonitoringPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredData.map(item => (
+                {paginatedData.map(item => (
                   <tr key={item.id} style={{ background: selectedIds.has(item.id) ? 'var(--bg-primary)' : 'transparent' }}>
                     {isAdmin && (
                       <td style={{ textAlign: 'center' }}>
@@ -443,6 +494,15 @@ export default function MonitoringPage() {
               </tbody>
             </table>
           </div>
+
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={filteredData.length}
+            itemsPerPage={itemsPerPage}
+            itemName="entries"
+          />
         </div>
 
       </div>

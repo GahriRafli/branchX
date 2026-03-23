@@ -25,7 +25,17 @@ export async function PATCH(request: Request) {
     const session = await getSession();
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { id, isRead } = await request.json();
+    const body = await request.json();
+
+    if (body.markAllAsRead) {
+      await (prisma as any).notification.updateMany({
+        where: { userId: session.userId, isRead: false },
+        data: { isRead: true }
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    const { id, isRead } = body;
 
     const notification = await (prisma as any).notification.update({
       where: { id, userId: session.userId },

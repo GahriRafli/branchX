@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, createContext, useContext } from 'react';
+import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 
@@ -21,18 +21,29 @@ interface Notification {
   createdAt: string;
 }
 
+export type ToastType = 'success' | 'error' | 'warning' | 'info';
+
+interface ToastMessage {
+  id: string;
+  title: string;
+  message: string;
+  type: ToastType;
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
   logout: () => Promise<void>;
+  showToast: (title: string, message: string, type?: ToastType) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   isAdmin: false,
-  logout: async () => { }
+  logout: async () => { },
+  showToast: () => { }
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -43,6 +54,19 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  const showToast = useCallback((title: string, message: string, type: ToastType = 'success') => {
+    const id = Math.random().toString(36).substring(7);
+    setToasts(prev => [...prev, { id, title, message, type }]);
+    setTimeout(() => {
+      removeToast(id);
+    }, 4000);
+  }, [removeToast]);
   const [monitoringOpen, setMonitoringOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -114,10 +138,10 @@ export default function DashboardLayout({
 
   if (!user) return null;
 
-  const visibleNotifications = notifications.filter(n => !hiddenNotifications.has(n.id));
+  const visibleNotifications = notifications.filter(n => !hiddenNotifications.has(n.id) && !n.isRead);
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAdmin, logout }}>
+    <AuthContext.Provider value={{ user, loading, isAdmin, logout, showToast }}>
       <InactivityTracker timeoutMinutes={1} />
       <div className="dashboard-layout">
         <button className="mobile-menu-btn" onClick={() => setSidebarOpen(true)}>
@@ -146,8 +170,18 @@ export default function DashboardLayout({
                       <span>Notifikasi Terbaru</span>
                       {visibleNotifications.length > 0 && (
                         <button 
-                          onClick={() => {
-                            setHiddenNotifications(new Set([...hiddenNotifications, ...visibleNotifications.map(n => n.id)]));
+                          onClick={async () => {
+                            const unreadIds = visibleNotifications.map(n => n.id);
+                            setHiddenNotifications(new Set([...hiddenNotifications, ...unreadIds]));
+                            try {
+                              await fetch('/api/notifications', {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ markAllAsRead: true })
+                              });
+                            } catch (e) {
+                              console.error('Failed to mark all as read', e);
+                            }
                           }} 
                           style={{ background: 'none', border: 'none', fontSize: '11px', color: 'var(--accent-blue)', cursor: 'pointer', fontWeight: 600 }}
                         >
@@ -273,6 +307,30 @@ export default function DashboardLayout({
           </div>
         </aside>
         <main className="main-content">{children}</main>
+      </div>
+      
+      <div className="toast-container">
+        {toasts.map(toast => {
+          const icons = {
+            success: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>,
+            error: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>,
+            warning: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>,
+            info: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+          };
+
+          return (
+            <div key={toast.id} className={`toast toast-${toast.type}`}>
+              <div className="toast-icon">{icons[toast.type]}</div>
+              <div className="toast-content">
+                <div className="toast-title">{toast.title}</div>
+                <div className="toast-message">{toast.message}</div>
+              </div>
+              <button className="toast-close" onClick={() => removeToast(toast.id)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+          );
+        })}
       </div>
     </AuthContext.Provider>
   );
