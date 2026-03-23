@@ -47,6 +47,7 @@ export async function POST(request: Request) {
       role: user.role,
       name: user.name,
       sessionId: '', // Simple login
+      can_access_monitoring: (user as any).can_access_monitoring || false,
     });
 
     const response = NextResponse.json({
