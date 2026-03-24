@@ -79,14 +79,14 @@ export default function UploadPage() {
         </div>
       )}
 
-      <div className="upload-zone" style={{ position: 'relative' }}>
+      <div className="upload-zone" id="tour-upload-zone" style={{ position: 'relative' }}>
         <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} disabled={uploading} />
         <div className="upload-icon">{uploading ? '⏳' : '☁️'}</div>
         <div className="upload-title">{uploading ? 'Processing file...' : 'Drop your file here or click to browse'}</div>
         <div className="upload-desc">Supported formats: Excel (.xlsx, .xls), CSV (.csv)</div>
       </div>
 
-      <div className="history-section" style={{ marginTop: '48px' }}>
+      <div className="history-section" id="tour-upload-history" style={{ marginTop: '48px' }}>
         <h2 className="table-title">Upload History</h2>
         <div className="table-container">
           <div className="data-table-wrapper">

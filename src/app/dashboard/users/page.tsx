@@ -86,14 +86,14 @@ export default function UsersPage() {
           <h1 className="page-title">Team Members</h1>
           <p className="page-subtitle">{users.length} registered users</p>
         </div>
-        <button className="btn btn-primary btn-sm" style={{ width: 'auto' }} onClick={() => {
+        <button id="tour-users-add" className="btn btn-primary btn-sm" style={{ width: 'auto' }} onClick={() => {
           setEditingUser(null);
           setUserForm({ name: '', nip: '', password: '', role: 'USER', can_access_monitoring: false });
           setShowUserModal(true);
         }}>Add User</button>
       </div>
 
-      <div className="table-container">
+      <div className="table-container" id="tour-users-table">
         <table className="data-table">
           <thead>
             <tr><th>Name</th><th>NIP</th><th>Role</th><th>Monitoring</th><th>Actions</th></tr>

@@ -3,6 +3,8 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { driver } from 'driver.js';
+import 'driver.js/dist/driver.css';
 
 interface User {
   id: string;
@@ -140,6 +142,58 @@ export default function DashboardLayout({
 
   const visibleNotifications = notifications.filter(n => !hiddenNotifications.has(n.id) && !n.isRead);
 
+  const startTour = () => {
+    let steps: any[] = [];
+
+    if (pathname === '/dashboard/dashboard') {
+      steps = isAdmin ? [
+        { element: '#tour-dash-stats', popover: { title: 'Rangkuman Metrik', description: 'Lihat jumlah tugas, anggota tim, dan berbagai status pencapaian secara ringkas di sini.' } },
+        { element: '#tour-dash-chart', popover: { title: 'Distribusi Tugas', description: 'Grafik ini memvisualisasikan proporsi setiap status pekerjaan tim Anda secara real-time.' } }
+      ] : [
+        { element: '#tour-dash-stats', popover: { title: 'Rangkuman Pribadi', description: 'Pantau jumlah dan status tugas Anda di sini.' } },
+        { element: '#tour-dash-recent', popover: { title: 'Tugas Terbaru', description: 'Daftar tugas yang baru saja Anda terima. Anda bisa langsung mengubah statusnya di sini.' } }
+      ];
+    } else if (pathname === '/dashboard/tasks') {
+      steps = isAdmin ? [
+        { element: '#tour-tasks-filter', popover: { title: 'Pencarian & Filter', description: 'Gunakan ini untuk menyaring tugas berdasarkan status atau prioritas dengan cepat.' } },
+        { element: '#tour-tasks-add', popover: { title: 'Tambah Tugas', description: 'Klik tombol ini untuk membuat tugas baru dan menugaskannya (assign) ke anggota tim tertentu.' } },
+        { element: '#tour-tasks-table', popover: { title: 'Daftar Tugas', description: 'Pusat manajemen tugas. Anda dapat mengedit, menghapus, atau memantau progress seluruh tugas.' } },
+        { element: '#tour-tasks-bulk', popover: { title: 'Aksi Massal', description: 'Centang beberapa tugas di tabel, lalu gunakan menu ini untuk mengubah Status atau Assignee secara serentak!' } }
+      ] : [
+        { element: '#tour-tasks-filter', popover: { title: 'Filter', description: 'Saring tugas Anda berdasarkan status.' } },
+        { element: '#tour-tasks-table', popover: { title: 'Cek Tugas Anda', description: 'Daftar ini adalah pekerjaan yang didelegasikan Admin kepada Anda.' } },
+        { element: '.status-select', popover: { title: 'Ubah Status', description: 'Jangan lupa ubah status tugas Anda menjadi DONE apabila sudah selesai Anda kerjakan!' } }
+      ];
+    } else if (pathname === '/dashboard/monitoring') {
+      steps = isAdmin ? [
+        { element: '#tour-gmm-chart', popover: { title: 'Grafik Pencapaian', description: 'Pantau performa GMM seluruh anggota tim beserta targetnya di sini.' } },
+        { element: '#tour-gmm-stats', popover: { title: 'Total Pencapaian', description: 'Kalkulasi total secara serentak dari seluruh data.' } },
+        { element: '#tour-gmm-bulk', popover: { title: 'Verifikasi Massal', description: 'Gunakan tombol pintar ini untuk Verifikasi atau Reject banyak data GMM secara sekaligus dengan satu klik.' } }
+      ] : [
+        { element: '#tour-gmm-chart', popover: { title: 'Grafik GMM Pribadi', description: 'Lihat perbandingan antara pencapaian GMM Anda dan Target yang ditetapkan.' } },
+        { element: '#tour-gmm-add', popover: { title: 'Lapor Data GMM', description: 'Klik tombol ini untuk men-submit data pencapaian baru agar bisa diverifikasi Admin.' } },
+        { element: '#tour-gmm-table', popover: { title: 'Riwayat GMM', description: 'Pantau apakah data yang Anda masukkan sudah diverifikasi (Verified) atau ditolak (Rejected).' } }
+      ];
+    } else if (pathname === '/dashboard/upload') {
+      steps = [
+        { element: '#tour-upload-zone', popover: { title: 'Area Upload', description: 'Tarik dan lepas (drag & drop) file Excel/CSV Anda di area ini, atau klik untuk memilih file dari komputer.' } },
+        { element: '#tour-upload-history', popover: { title: 'Riwayat Upload', description: 'Lihat daftar file yang pernah Anda upload sebelumnya. Anda juga bisa langsung menuju halaman Tasks dari sini.' } }
+      ];
+    } else if (pathname === '/dashboard/users') {
+      steps = [
+        { element: '#tour-users-add', popover: { title: 'Tambah Staff Baru', description: 'Berikan akses kepada anggota tim baru melalui tombol ini.' } },
+        { element: '#tour-users-table', popover: { title: 'Manajemen Akun', description: 'Ubah peran (User / Admin) atau akses spesifik GMM Monitoring staf.' } }
+      ];
+    } else {
+      steps = [
+        { element: '#tour-dashboard', popover: { title: 'Selamat Datang', description: 'Pilih salah satu menu di bilah navigasi kiri ini untuk memulai (misalnya klik menu Tasks). Lalu klik "Panduan Halaman" lagi di halaman tersebut untuk mempelajari detailnya.' } }
+      ];
+    }
+
+    const tourDriver = driver({ showProgress: true, steps });
+    tourDriver.drive();
+  };
+
   return (
     <AuthContext.Provider value={{ user, loading, isAdmin, logout, showToast }}>
       <InactivityTracker timeoutMinutes={1} />
@@ -151,120 +205,122 @@ export default function DashboardLayout({
         <aside className={`sidebar ${sidebarOpen ? 'mobile-open' : ''}`}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '15px' }}>
             <div className="sidebar-logo">TheLeads</div>
-            {isAdmin && (
-              <div style={{ position: 'relative' }}>
-                <button 
-                  onClick={() => setShowNotifications(!showNotifications)}
-                  style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', position: 'relative', padding: '5px' }}
-                >
-                  🔔
-                  {visibleNotifications.some(n => !n.isRead) && (
-                    <span style={{ position: 'absolute', top: '-2px', right: '-2px', background: 'var(--accent-red)', color: 'white', fontSize: '9px', fontWeight: 'bold', minWidth: '16px', height: '16px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
-                      {visibleNotifications.filter(n => !n.isRead).length}
-                    </span>
-                  )}
-                </button>
-                {showNotifications && (
-                  <div className="card" style={{ position: 'absolute', top: '40px', left: '0', width: '280px', zIndex: 100, maxHeight: '350px', overflowY: 'auto', padding: '12px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-lg)' }}>
-                    <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-primary)' }}>
-                      <span>Notifikasi Terbaru</span>
-                      {visibleNotifications.length > 0 && (
-                        <button 
-                          onClick={async () => {
-                            const unreadIds = visibleNotifications.map(n => n.id);
-                            setHiddenNotifications(new Set([...hiddenNotifications, ...unreadIds]));
-                            try {
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {isAdmin && (
+                <div style={{ position: 'relative' }} id="tour-notifications">
+                  <button
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', position: 'relative', padding: '5px' }}
+                  >
+                    🔔
+                    {visibleNotifications.some(n => !n.isRead) && (
+                      <span style={{ position: 'absolute', top: '-2px', right: '-2px', background: 'var(--accent-red)', color: 'white', fontSize: '9px', fontWeight: 'bold', minWidth: '16px', height: '16px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                        {visibleNotifications.filter(n => !n.isRead).length}
+                      </span>
+                    )}
+                  </button>
+                  {showNotifications && (
+                    <div className="card" style={{ position: 'absolute', top: '40px', left: '0', width: '280px', zIndex: 100, maxHeight: '350px', overflowY: 'auto', padding: '12px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-lg)' }}>
+                      <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-primary)' }}>
+                        <span>Notifikasi Terbaru</span>
+                        {visibleNotifications.length > 0 && (
+                          <button
+                            onClick={async () => {
+                              const unreadIds = visibleNotifications.map(n => n.id);
+                              setHiddenNotifications(new Set([...hiddenNotifications, ...unreadIds]));
+                              try {
+                                await fetch('/api/notifications', {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ markAllAsRead: true })
+                                });
+                              } catch (e) {
+                                console.error('Failed to mark all as read', e);
+                              }
+                            }}
+                            style={{ background: 'none', border: 'none', fontSize: '11px', color: 'var(--accent-blue)', cursor: 'pointer', fontWeight: 600 }}
+                          >
+                            Clear All
+                          </button>
+                        )}
+                      </div>
+                      {visibleNotifications.length === 0 ? (
+                        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', textAlign: 'center', padding: '16px 10px' }}>Tidak ada notifikasi</div>
+                      ) : (
+                        visibleNotifications.map(n => (
+                          <div
+                            key={n.id}
+                            onClick={async () => {
                               await fetch('/api/notifications', {
                                 method: 'PATCH',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ markAllAsRead: true })
+                                body: JSON.stringify({ id: n.id, isRead: true })
                               });
-                            } catch (e) {
-                              console.error('Failed to mark all as read', e);
-                            }
-                          }} 
-                          style={{ background: 'none', border: 'none', fontSize: '11px', color: 'var(--accent-blue)', cursor: 'pointer', fontWeight: 600 }}
-                        >
-                          Clear All
-                        </button>
+                              setNotifications(prev => prev.map(notif => notif.id === n.id ? { ...notif, isRead: true } : notif));
+                              if (n.type === 'GMM_ENTRY') router.push('/dashboard/monitoring');
+                              if (n.type === 'TASK_DONE') {
+                                const titleSplit = n.message.split('DONE: ');
+                                if (titleSplit.length > 1) {
+                                  router.push(`/dashboard/tasks?search=${encodeURIComponent(titleSplit[1].trim())}&status=DONE`);
+                                } else {
+                                  router.push('/dashboard/tasks?status=DONE');
+                                }
+                              }
+                              setShowNotifications(false);
+                            }}
+                            style={{
+                              padding: '10px 10px 10px 24px',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              borderBottom: '1px solid var(--border-subtle)',
+                              background: n.isRead ? 'transparent' : 'var(--accent-blue-light)',
+                              borderRadius: '6px',
+                              marginBottom: '6px',
+                              color: n.isRead ? 'var(--text-secondary)' : 'var(--text-primary)',
+                              fontWeight: n.isRead ? 400 : 500,
+                              position: 'relative',
+                              transition: 'var(--transition-fast)'
+                            }}
+                          >
+                            {!n.isRead && (
+                              <span style={{ position: 'absolute', left: '8px', top: '15px', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-blue)' }} />
+                            )}
+                            <div style={{ lineHeight: '1.4' }}>{n.message}</div>
+                            <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '4px', fontWeight: 400 }}>{new Date(n.createdAt).toLocaleString()}</div>
+                          </div>
+                        ))
                       )}
                     </div>
-                    {visibleNotifications.length === 0 ? (
-                      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', textAlign: 'center', padding: '16px 10px' }}>Tidak ada notifikasi</div>
-                    ) : (
-                      visibleNotifications.map(n => (
-                        <div 
-                          key={n.id} 
-                          onClick={async () => {
-                            await fetch('/api/notifications', {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ id: n.id, isRead: true })
-                            });
-                            setNotifications(prev => prev.map(notif => notif.id === n.id ? { ...notif, isRead: true } : notif));
-                            if (n.type === 'GMM_ENTRY') router.push('/dashboard/monitoring');
-                            if (n.type === 'TASK_DONE') {
-                              const titleSplit = n.message.split('DONE: ');
-                              if (titleSplit.length > 1) {
-                                router.push(`/dashboard/tasks?search=${encodeURIComponent(titleSplit[1].trim())}&status=DONE`);
-                              } else {
-                                router.push('/dashboard/tasks?status=DONE');
-                              }
-                            }
-                            setShowNotifications(false);
-                          }}
-                          style={{ 
-                            padding: '10px 10px 10px 24px', 
-                            fontSize: '12px', 
-                            cursor: 'pointer', 
-                            borderBottom: '1px solid var(--border-subtle)', 
-                            background: n.isRead ? 'transparent' : 'var(--accent-blue-light)', 
-                            borderRadius: '6px', 
-                            marginBottom: '6px',
-                            color: n.isRead ? 'var(--text-secondary)' : 'var(--text-primary)',
-                            fontWeight: n.isRead ? 400 : 500,
-                            position: 'relative',
-                            transition: 'var(--transition-fast)'
-                          }}
-                        >
-                          {!n.isRead && (
-                            <span style={{ position: 'absolute', left: '8px', top: '15px', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-blue)' }} />
-                          )}
-                          <div style={{ lineHeight: '1.4' }}>{n.message}</div>
-                          <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '4px', fontWeight: 400 }}>{new Date(n.createdAt).toLocaleString()}</div>
-                        </div>
-                      ))
-                    )}
-                  </div>
 
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <div className="sidebar-subtitle">{isAdmin ? 'Admin Panel' : 'User Panel'}</div>
           <nav className="sidebar-nav">
-            <Link href="/dashboard/dashboard" className={`sidebar-link ${pathname === '/dashboard/dashboard' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+            <Link href="/dashboard/dashboard" id="tour-dashboard" className={`sidebar-link ${pathname === '/dashboard/dashboard' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
               <span className="icon">📊</span> Dashboard
             </Link>
-            <Link href="/dashboard/tasks" className={`sidebar-link ${pathname === '/dashboard/tasks' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+            <Link href="/dashboard/tasks" id="tour-tasks" className={`sidebar-link ${pathname === '/dashboard/tasks' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
               <span className="icon">📋</span> Tasks
             </Link>
             {isAdmin && (
-              <Link href="/dashboard/upload" className={`sidebar-link ${pathname === '/dashboard/upload' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+              <Link href="/dashboard/upload" id="tour-upload" className={`sidebar-link ${pathname === '/dashboard/upload' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
                 <span className="icon">📂</span> Upload Files
               </Link>
             )}
-            
+
             {!isAdmin && (
-              <Link href="/dashboard/monitoring" className={`sidebar-link ${pathname === '/dashboard/monitoring' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+              <Link href="/dashboard/monitoring" id="tour-monitoring" className={`sidebar-link ${pathname === '/dashboard/monitoring' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
                 <span className="icon">📈</span> GMM
               </Link>
             )}
 
             {isAdmin && (
-              <div className="sidebar-dropdown-wrapper">
-                <button 
-                  className={`sidebar-link ${pathname.startsWith('/dashboard/monitoring') ? 'active' : ''}`} 
+              <div className="sidebar-dropdown-wrapper" id="tour-monitoring">
+                <button
+                  className={`sidebar-link ${pathname.startsWith('/dashboard/monitoring') ? 'active' : ''}`}
                   onClick={() => setMonitoringOpen(!monitoringOpen)}
                   style={{ width: '100%', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                 >
@@ -286,14 +342,20 @@ export default function DashboardLayout({
             {isAdmin && (
               <>
                 <div className="sidebar-group-label" style={{ padding: '12px 16px 4px', fontSize: '11px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Administration</div>
-                <Link href="/dashboard/users" className={`sidebar-link ${pathname === '/dashboard/users' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+                <Link href="/dashboard/users" id="tour-users" className={`sidebar-link ${pathname === '/dashboard/users' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
                   <span className="icon">👥</span> Users
                 </Link>
               </>
             )}
-            {/* <Link href="/dashboard/game" className={`sidebar-link ${pathname === '/dashboard/game' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
-              <span className="icon">🎮</span> Mini Game
-            </Link> */}
+
+            <div className="sidebar-group-label" style={{ padding: '16px 16px 4px', fontSize: '11px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pusat Bantuan</div>
+            <button
+              onClick={startTour}
+              style={{ width: 'calc(100% - 24px)', margin: '4px 12px 12px', textAlign: 'left', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', borderRadius: '6px', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', color: '#60a5fa', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', transition: 'all 0.2s ease' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              Panduan Halaman
+            </button>
           </nav>
           <div className="sidebar-footer">
             <div className="sidebar-user">
@@ -308,7 +370,7 @@ export default function DashboardLayout({
         </aside>
         <main className="main-content">{children}</main>
       </div>
-      
+
       <div className="toast-container">
         {toasts.map(toast => {
           const icons = {

@@ -113,7 +113,7 @@ export default function DashboardMainPage() {
         </div>
       </div>
 
-      <div className="stats-grid">
+      <div className="stats-grid" id="tour-dash-stats">
         <div className="stat-card indigo" onClick={() => router.push('/dashboard/tasks')} style={{ cursor: 'pointer' }}>
           <div className="stat-label">Total Tasks</div>
           <div className="stat-value">{stats.totalTasks}</div>
@@ -138,7 +138,7 @@ export default function DashboardMainPage() {
         )}
       </div>
 
-      <div className="charts-grid">
+      <div className="charts-grid" id="tour-dash-chart">
         <div className="chart-card">
           <div className="chart-title">Task Distribution</div>
           <ResponsiveContainer width="100%" height={300}>
@@ -179,7 +179,7 @@ export default function DashboardMainPage() {
       </div>
 
       {!isAdmin && (
-        <div className="table-container" style={{ marginTop: '32px' }}>
+        <div className="table-container" id="tour-dash-recent" style={{ marginTop: '32px' }}>
           <div className="table-header">
             <h2 className="table-title">My Recent Tasks</h2>
             <p className="page-subtitle" style={{ margin: 0 }}>Showing your currently assigned tasks</p>

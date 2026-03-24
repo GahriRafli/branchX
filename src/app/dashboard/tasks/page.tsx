@@ -331,7 +331,7 @@ function TasksPageContent() {
               <span>📄</span> Export CSV
             </button>
             {isAdmin && (
-              <button className="btn btn-primary btn-sm" onClick={() => {
+              <button id="tour-tasks-add" className="btn btn-primary btn-sm" onClick={() => {
                 setEditingTask(null);
                 setTaskForm({ title: '', description: '', priority: 'MEDIUM', status: 'TODO', assigneeId: '' });
                 setShowTaskModal(true);
@@ -341,7 +341,7 @@ function TasksPageContent() {
           </div>
         </div>
 
-        <div className="filter-row">
+        <div className="filter-row" id="tour-tasks-filter">
           <select className="filter-input" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="">All Status</option>
             <option value="TODO">To Do</option>
@@ -358,11 +358,11 @@ function TasksPageContent() {
           </select>
         </div>
 
-        <div className="data-table-wrapper">
+        <div className="data-table-wrapper" id="tour-tasks-table">
           <table className="data-table">
             <thead>
                 <tr>
-                  <th style={{ width: '40px', textAlign: 'center' }}>
+                  <th id="tour-tasks-bulk" style={{ width: '40px', textAlign: 'center' }}>
                     <input 
                       type="checkbox" 
                       checked={paginatedTasks.length > 0 && selectedTaskIds.size === paginatedTasks.length}

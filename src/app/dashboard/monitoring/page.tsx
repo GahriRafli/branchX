@@ -309,7 +309,7 @@ export default function MonitoringPage() {
 
       {isAdmin && (
         <>
-          <div className="dashboard-grid" style={{ marginBottom: '24px' }}>
+          <div className="dashboard-grid" id="tour-gmm-stats" style={{ marginBottom: '24px' }}>
             <div className="stat-card indigo">
               <div className="stat-label">Total Amount</div>
               <div className="stat-value">{stats.totalAmount.toLocaleString()}</div>
@@ -328,7 +328,7 @@ export default function MonitoringPage() {
             </div>
           </div>
 
-          <div className="card" style={{ marginBottom: '24px', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
+          <div className="card" id="tour-gmm-chart" style={{ marginBottom: '24px', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
             <h3 style={{ marginBottom: '20px', fontSize: '15px' }}>Achievement Overview</h3>
             <div style={{ width: '100%', height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -365,6 +365,7 @@ export default function MonitoringPage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button 
+              id="tour-gmm-add"
               className="btn btn-primary btn-sm" 
               onClick={() => {
                 setEditingEntry(null);
@@ -404,13 +405,13 @@ export default function MonitoringPage() {
             />
           </div>
         </div>
-        <div className="table-container" style={{ margin: 0, border: 'none', borderRadius: 0 }}>
+        <div className="table-container" id="tour-gmm-table" style={{ margin: 0, border: 'none', borderRadius: 0 }}>
           <div className="data-table-wrapper">
             <table className="data-table">
               <thead>
                 <tr>
                   {isAdmin && (
-                    <th style={{ width: '40px', textAlign: 'center' }}>
+                    <th id="tour-gmm-bulk" style={{ width: '40px', textAlign: 'center' }}>
                       <input 
                         type="checkbox" 
                         checked={paginatedData.length > 0 && selectedIds.size === paginatedData.length}
