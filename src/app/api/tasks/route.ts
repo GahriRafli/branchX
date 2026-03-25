@@ -33,15 +33,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { title, description, priority, status, assigneeId } = await request.json();
+    const { title, description, priority, status, assigneeId, leadId } = await request.json();
 
     const task = await prisma.task.create({
       data: {
         title,
         description: description || '',
         priority: priority || 'MEDIUM',
-        status: status || 'TODO',
+        status: status || 'OPEN',
         assigneeId: assigneeId || null,
+        leadId: leadId || null,
       },
       include: { assignee: { select: { id: true, name: true, nip: true } } },
     });
@@ -93,15 +94,41 @@ export async function PATCH(request: Request) {
       include: { assignee: { select: { id: true, name: true, nip: true } } },
     });
 
+    if (task.leadId && status) {
+       const leadUpdateData: any = { last_activity_at: new Date() };
+       
+       if (status === 'IN_PROGRESS' || status === 'COMPLETED' || status === 'DONE') {
+          const parentLead = await prisma.lead.findUnique({ where: { id: task.leadId } });
+          if (parentLead && (parentLead.status === 'NEW' || parentLead.status === 'READY_TO_FOLLOW_UP')) {
+             leadUpdateData.status = 'CONTACTED';
+          }
+       }
+       await prisma.lead.update({
+          where: { id: task.leadId },
+          data: leadUpdateData
+       });
+    }
+
     if (status === 'DONE' && existingTask.status !== 'DONE') {
       const admins = await prisma.user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
       const assigneeName = existingTask.assignee?.name || 'Seorang user';
+      // Look up customer/lead name for the notification
+      let customerName = '';
+      if ((task as any).leadId) {
+        try {
+          const parentLead = await (prisma as any).lead.findUnique({ where: { id: (task as any).leadId }, select: { lead_name: true } });
+          if (parentLead?.lead_name) customerName = parentLead.lead_name;
+        } catch { /* ignore */ }
+      }
+      const message = customerName
+        ? `${assigneeName} menyelesaikan task untuk ${customerName}: ${existingTask.title}`
+        : `${assigneeName} merubah status task menjadi DONE: ${existingTask.title}`;
       if (admins.length > 0) {
         await prisma.notification.createMany({
           data: admins.map((admin: any) => ({
             userId: admin.id,
             type: 'TASK_DONE',
-            message: `${assigneeName} merubah status task menjadi DONE: ${existingTask.title}`,
+            message,
             referenceId: task.id,
             isRead: false
           }))

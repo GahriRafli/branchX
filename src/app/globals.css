@@ -1187,28 +1187,40 @@ html, body {
 
   .main-content {
     margin-left: 0;
-    padding: 20px;
-    padding-top: 72px; /* Space for mobile menu btn */
+    padding: 16px;
+    padding-top: 68px;
   }
 
   .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
   }
 
   .charts-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 
   .page-header {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
+    align-items: flex-start !important;
+    gap: 12px;
   }
 
   .page-header .btn {
     width: 100%;
   }
 
+  .page-title {
+    font-size: 20px !important;
+  }
+
+  /* CRM Export Toolbar */
+  .main-content > div[style*="Periode Export"] {
+    flex-direction: column !important;
+    gap: 10px !important;
+  }
+
+  /* Table responsiveness */
   .table-header {
     flex-direction: column;
     align-items: flex-start;
@@ -1217,24 +1229,96 @@ html, body {
 
   .table-actions {
     width: 100%;
+    flex-wrap: wrap !important;
     overflow-x: auto;
     padding-bottom: 4px;
   }
 
+  .table-container,
   .data-table-wrapper {
-    margin: 0 -20px;
-    padding: 0 20px;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .data-table {
+    min-width: 600px;
+  }
+
+  /* Lead cards */
+  .leads-container .card > div:first-child {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+
+  .leads-container .card > div:first-child > div:last-child {
+    width: 100%;
+    justify-content: flex-start !important;
+  }
+
+  /* Notification dropdown */
+  .notification-dropdown {
+    width: 260px !important;
+    left: -100px !important;
   }
 
   .pagination {
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
     text-align: center;
   }
 
   .pagination-info {
     margin-right: 0;
+  }
+
+  /* Modal adjustments */
+  .modal-content {
+    width: calc(100% - 24px) !important;
+    margin: 12px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  /* Toast on mobile */
+  .toast-container {
+    right: 12px !important;
+    left: 12px !important;
+    bottom: 16px !important;
+  }
+
+  .toast {
+    min-width: unset !important;
+    max-width: unset !important;
+    width: 100%;
+  }
+
+  /* Filter inputs on mobile */
+  .filter-input, .search-input {
+    font-size: 14px !important;
+  }
+
+  /* Export toolbar stacking on mobile */
+  .export-toolbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 12px !important;
+  }
+
+  .export-toolbar > div {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Notification dropdown on mobile */
+  .notification-dropdown {
+    position: fixed !important;
+    top: 60px !important;
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
+    transform: none !important;
+    max-height: 70vh !important;
   }
 }
 
@@ -1243,11 +1327,29 @@ html, body {
   .form-grid-3 {
     grid-template-columns: 1fr;
   }
+
+  /* Stat cards - single column */
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .stat-card {
+    padding: 16px !important;
+  }
+
+  .stat-value {
+    font-size: 22px !important;
+  }
 }
 
 @media (max-width: 480px) {
+  .main-content {
+    padding: 12px;
+    padding-top: 64px;
+  }
+
   .stats-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
   
   .login-card {
@@ -1256,9 +1358,20 @@ html, body {
   }
 
   .modal-content {
-    margin: 16px;
-    padding: 20px;
-    width: calc(100% - 32px);
+    margin: 8px;
+    padding: 16px;
+    width: calc(100% - 16px) !important;
+  }
+
+  /* Lead card name smaller on very small screens */
+  .leads-container .card div[style*="font-size: 18px"] {
+    font-size: 15px !important;
+    flex-wrap: wrap;
+  }
+
+  /* Hide aging text, just show emoji */
+  .page-subtitle {
+    font-size: 12px;
   }
 }
 

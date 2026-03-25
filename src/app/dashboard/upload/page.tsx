@@ -9,16 +9,18 @@ export default function UploadPage() {
   const router = useRouter();
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [history, setHistory] = useState<string[]>([]);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [selectedFilename, setSelectedFilename] = useState('');
+  const [history, setHistory] = useState<any[]>([]);
   const [historyPage, setHistoryPage] = useState(1);
   const historyPageSize = 5;
 
   const fetchHistory = useCallback(async () => {
-    const res = await fetch('/api/tasks');
+    const res = await fetch('/api/upload-leads/history');
     const data = await res.json();
-    if (data.tasks) {
-      const files = Array.from(new Set(data.tasks.map((t: any) => t.sourceFile).filter(Boolean))) as string[];
-      setHistory(files);
+    if (data.batches) {
+      setHistory(data.batches);
     }
   }, []);
 
@@ -41,22 +43,48 @@ export default function UploadPage() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const res = await fetch('/api/upload-leads/preview', { method: 'POST', body: formData });
       const data = await res.json();
 
       if (!res.ok) {
         setUploadResult({ type: 'error', message: data.error });
       } else {
-        setUploadResult({ type: 'success', message: data.message });
-        fetchHistory();
-        setTimeout(() => setUploadResult(null), 5000);
+        setPreviewData(data);
+        setSelectedFilename(file.name);
       }
     } catch {
-      setUploadResult({ type: 'error', message: 'Upload failed' });
+      setUploadResult({ type: 'error', message: 'Parsing failed' });
     } finally {
       setUploading(false);
       e.target.value = '';
     }
+  };
+
+  const handleConfirmImport = async () => {
+     setConfirming(true);
+     setUploadResult(null);
+     
+     try {
+        const res = await fetch('/api/upload-leads/confirm', { 
+           method: 'POST', 
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ leads: previewData.allData, filename: selectedFilename }) 
+        });
+        const data = await res.json();
+        
+        if (!res.ok) {
+           setUploadResult({ type: 'error', message: data.error });
+        } else {
+           setUploadResult({ type: 'success', message: data.message });
+           setPreviewData(null);
+           fetchHistory();
+           setTimeout(() => setUploadResult(null), 8000);
+        }
+     } catch(e) {
+        setUploadResult({ type: 'error', message: 'Import failed' });
+     } finally {
+        setConfirming(false);
+     }
   };
 
   const paginatedHistory = history.slice((historyPage - 1) * historyPageSize, historyPage * historyPageSize);
@@ -79,12 +107,82 @@ export default function UploadPage() {
         </div>
       )}
 
-      <div className="upload-zone" id="tour-upload-zone" style={{ position: 'relative' }}>
-        <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} disabled={uploading} />
-        <div className="upload-icon">{uploading ? '⏳' : '☁️'}</div>
-        <div className="upload-title">{uploading ? 'Processing file...' : 'Drop your file here or click to browse'}</div>
-        <div className="upload-desc">Supported formats: Excel (.xlsx, .xls), CSV (.csv)</div>
-      </div>
+      {!previewData ? (
+        <div className="upload-zone" id="tour-upload-zone" style={{ position: 'relative' }}>
+          <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} disabled={uploading} />
+          <div className="upload-icon">{uploading ? '⏳' : '☁️'}</div>
+          <div className="upload-title">{uploading ? 'Processing file...' : 'Drop Excel Leads file here or click to browse'}</div>
+          <div className="upload-desc">Required templates: Potensi Intensifikasi, Potensi Ekstensifikasi, Akuisisi BottomUp</div>
+        </div>
+      ) : (
+        <div className="preview-section" style={{ background: 'var(--bg-card)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-subtle)', marginBottom: '32px' }}>
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+              <div>
+                 <h2 style={{ fontSize: '18px', fontWeight: 600, margin: '0 0 8px 0' }}>Preview Data Import</h2>
+                 <p style={{ color: 'var(--text-tertiary)', fontSize: '13px', margin: 0 }}>File: {selectedFilename}</p>
+                 
+                 <div style={{ display: 'flex', gap: '16px', marginTop: '16px' }}>
+                    <div style={{ background: 'var(--accent-blue-light)', color: 'var(--accent-blue)', padding: '12px 16px', borderRadius: '8px' }}>
+                       <div style={{ fontSize: '24px', fontWeight: 700 }}>{previewData.summary.totalFound}</div>
+                       <div style={{ fontSize: '12px', fontWeight: 500 }}>Total Leads Found</div>
+                    </div>
+                    <div style={{ background: 'rgba(34, 197, 94, 0.1)', color: 'var(--accent-green)', padding: '12px 16px', borderRadius: '8px' }}>
+                       <div style={{ fontSize: '24px', fontWeight: 700 }}>{previewData.summary.validCount}</div>
+                       <div style={{ fontSize: '12px', fontWeight: 500 }}>Valid to Import</div>
+                    </div>
+                    <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-red)', padding: '12px 16px', borderRadius: '8px' }}>
+                       <div style={{ fontSize: '24px', fontWeight: 700 }}>{previewData.summary.duplicateCount}</div>
+                       <div style={{ fontSize: '12px', fontWeight: 500 }}>Duplicates (Skipped)</div>
+                    </div>
+                 </div>
+              </div>
+              
+              <div style={{ display: 'flex', gap: '12px' }}>
+                 <button className="btn btn-secondary" onClick={() => setPreviewData(null)} disabled={confirming}>Cancel</button>
+                 <button className="btn btn-primary" onClick={handleConfirmImport} disabled={confirming || previewData.summary.validCount === 0}>
+                    {confirming ? 'Importing...' : 'Confirm Import'}
+                 </button>
+              </div>
+           </div>
+
+           <div className="table-container" style={{ marginTop: '20px', maxHeight: '400px', overflowY: 'auto' }}>
+              <table className="data-table">
+                 <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                    <tr>
+                       <th>Status</th>
+                       <th>Lead Name</th>
+                       <th>CIF</th>
+                       <th>Type</th>
+                       <th>Potential Amt</th>
+                       <th>Matched PIC</th>
+                    </tr>
+                 </thead>
+                 <tbody>
+                    {previewData.preview.map((row: any, i: number) => (
+                       <tr key={i} style={{ opacity: row.isDuplicate ? 0.6 : 1 }}>
+                          <td>
+                             {row.isDuplicate ? 
+                                <span className="status-badge" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-red)' }}>Duplicate</span> : 
+                                <span className="status-badge" style={{ background: 'rgba(34, 197, 94, 0.1)', color: 'var(--accent-green)' }}>Valid</span>
+                             }
+                          </td>
+                          <td style={{ fontWeight: 500 }}>{row.lead_name}</td>
+                          <td>{row.cif || '-'}</td>
+                          <td><span className="priority-badge priority-medium" style={{ fontSize: '10px' }}>{row.lead_type.replace('_', ' ')}</span></td>
+                          <td>{new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(row.potential_amount)}</td>
+                          <td>{row.matchedUserName || <span style={{ color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Unassigned</span>}</td>
+                       </tr>
+                    ))}
+                 </tbody>
+              </table>
+           </div>
+           {previewData.allData.length > 50 && (
+              <div style={{ textAlign: 'center', padding: '12px', color: 'var(--text-tertiary)', fontSize: '12px', background: 'var(--bg-main)' }}>
+                 Showing top 50 leads in preview.
+              </div>
+           )}
+        </div>
+      )}
 
       <div className="history-section" id="tour-upload-history" style={{ marginTop: '48px' }}>
         <h2 className="table-title">Upload History</h2>
@@ -98,9 +196,14 @@ export default function UploadPage() {
                 {paginatedHistory.length === 0 ? (
                   <tr><td colSpan={2} style={{ textAlign: 'center', padding: '24px' }}>No upload history</td></tr>
                 ) : (
-                  paginatedHistory.map((file, i) => (
+                  paginatedHistory.map((batch, i) => (
                     <tr key={i}>
-                      <td><span className="file-icon">📄</span> {file}</td>
+                      <td>
+                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span style={{ fontWeight: 600 }}><span className="file-icon">📄</span> {batch.filename}</span>
+                            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>{new Date(batch.created_at).toLocaleString()} • Imported {batch.valid_rows} Leads</span>
+                         </div>
+                      </td>
                       <td><button className="btn btn-secondary btn-sm" onClick={() => router.push('/dashboard/tasks')}>View Tasks</button></td>
                     </tr>
                   ))

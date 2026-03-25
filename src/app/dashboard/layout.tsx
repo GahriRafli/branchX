@@ -140,7 +140,8 @@ export default function DashboardLayout({
 
   if (!user) return null;
 
-  const visibleNotifications = notifications.filter(n => !hiddenNotifications.has(n.id) && !n.isRead);
+  const visibleNotifications = notifications.filter(n => !hiddenNotifications.has(n.id));
+  const unreadCount = visibleNotifications.filter(n => !n.isRead).length;
 
   const startTour = () => {
     let steps: any[] = [];
@@ -155,14 +156,17 @@ export default function DashboardLayout({
       ];
     } else if (pathname === '/dashboard/tasks') {
       steps = isAdmin ? [
-        { element: '#tour-tasks-filter', popover: { title: 'Pencarian & Filter', description: 'Gunakan ini untuk menyaring tugas berdasarkan status atau prioritas dengan cepat.' } },
-        { element: '#tour-tasks-add', popover: { title: 'Tambah Tugas', description: 'Klik tombol ini untuk membuat tugas baru dan menugaskannya (assign) ke anggota tim tertentu.' } },
-        { element: '#tour-tasks-table', popover: { title: 'Daftar Tugas', description: 'Pusat manajemen tugas. Anda dapat mengedit, menghapus, atau memantau progress seluruh tugas.' } },
-        { element: '#tour-tasks-bulk', popover: { title: 'Aksi Massal', description: 'Centang beberapa tugas di tabel, lalu gunakan menu ini untuk mengubah Status atau Assignee secara serentak!' } }
+        { popover: { title: '📋 Halaman CRM Framework', description: 'Ini adalah pusat manajemen pipeline leads dan follow-up tasks Anda. Mari kita pahami setiap fiturnya!', side: 'bottom' as const } },
+        { element: '#tour-view-toggle', popover: { title: '🔄 Mode Tampilan', description: '2 mode tersedia:\n\n• **Grouped by Leads** — Menampilkan pipeline per nasabah beserta task follow-up-nya.\n• **All Tasks List** — Menampilkan semua tugas dalam satu tabel datar.', side: 'bottom' as const } },
+        { element: '#tour-export-toolbar', popover: { title: '📊 Export & Periode', description: 'Pilih rentang tanggal untuk memfilter data, lalu klik **Export Excel** untuk mengunduh data leads beserta potensi nominalnya.', side: 'bottom' as const } },
+        { popover: { title: '🏢 Tab: Grouped by Leads', description: 'Dalam mode ini, setiap nasabah ditampilkan sebagai kartu lead yang bisa di-expand. Anda dapat melihat:\n\n• 💰 Potensi Nominal\n• 📍 Cabang\n• ⏱ Aging (usia lead)\n• Status pipeline (WON/LOST/READY)', side: 'bottom' as const } },
+        { popover: { title: '👤 Assign Karyawan', description: 'Klik kartu lead untuk expand, lalu pada tabel **Activity & Sub-tasks**, klik dropdown di kolom **Assignee** untuk menugaskan task ke karyawan tertentu.', side: 'bottom' as const } },
+        { popover: { title: '📝 Tab: All Tasks List', description: 'Mode ini menampilkan seluruh tugas dalam satu tabel. Berguna untuk:\n\n• Melihat semua tugas sekaligus\n• Filter berdasarkan status\n• Bulk actions (pilih banyak, ubah status serentak)', side: 'bottom' as const } },
+        { element: '#tour-notifications', popover: { title: '🔔 Notifikasi', description: 'Klik lonceng untuk melihat notifikasi terbaru. Klik pada notifikasi akan langsung mengarahkan Anda ke halaman dan data terkait.', side: 'right' as const } }
       ] : [
-        { element: '#tour-tasks-filter', popover: { title: 'Filter', description: 'Saring tugas Anda berdasarkan status.' } },
-        { element: '#tour-tasks-table', popover: { title: 'Cek Tugas Anda', description: 'Daftar ini adalah pekerjaan yang didelegasikan Admin kepada Anda.' } },
-        { element: '.status-select', popover: { title: 'Ubah Status', description: 'Jangan lupa ubah status tugas Anda menjadi DONE apabila sudah selesai Anda kerjakan!' } }
+        { popover: { title: '📋 Tugas Follow-Up Anda', description: 'Halaman ini berisi semua tugas follow-up yang telah didelegasikan Admin kepada Anda.' } },
+        { element: '#tour-view-toggle', popover: { title: '🔄 Mode Tampilan', description: 'Pilih **Grouped by Leads** untuk melihat per nasabah, atau **All Tasks List** untuk melihat semua tugas.', side: 'bottom' as const } },
+        { element: '.status-select', popover: { title: '✅ Ubah Status', description: 'Jangan lupa ubah status tugas menjadi **DONE** apabila sudah selesai dikerjakan! Admin akan mendapat notifikasi otomatis.', side: 'bottom' as const } }
       ];
     } else if (pathname === '/dashboard/monitoring') {
       steps = isAdmin ? [
@@ -213,83 +217,95 @@ export default function DashboardLayout({
                     style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', position: 'relative', padding: '5px' }}
                   >
                     🔔
-                    {visibleNotifications.some(n => !n.isRead) && (
+                    {unreadCount > 0 && (
                       <span style={{ position: 'absolute', top: '-2px', right: '-2px', background: 'var(--accent-red)', color: 'white', fontSize: '9px', fontWeight: 'bold', minWidth: '16px', height: '16px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
-                        {visibleNotifications.filter(n => !n.isRead).length}
+                        {unreadCount}
                       </span>
                     )}
                   </button>
                   {showNotifications && (
-                    <div className="card" style={{ position: 'absolute', top: '40px', left: '0', width: '280px', zIndex: 100, maxHeight: '350px', overflowY: 'auto', padding: '12px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-lg)' }}>
-                      <div style={{ fontWeight: 600, fontSize: '13px', marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-primary)' }}>
-                        <span>Notifikasi Terbaru</span>
+                    <div className="card notification-dropdown" style={{ position: 'absolute', top: '40px', left: '0', width: '300px', zIndex: 100, maxHeight: '400px', overflowY: 'auto', padding: '0', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-lg)', borderRadius: '12px' }}>
+                      <div style={{ fontWeight: 600, fontSize: '14px', padding: '14px 16px 10px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'var(--text-primary)' }}>
+                        <span>🔔 Notifikasi</span>
                         {visibleNotifications.length > 0 && (
                           <button
-                            onClick={async () => {
-                              const unreadIds = visibleNotifications.map(n => n.id);
-                              setHiddenNotifications(new Set([...hiddenNotifications, ...unreadIds]));
-                              try {
-                                await fetch('/api/notifications', {
-                                  method: 'PATCH',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ markAllAsRead: true })
-                                });
-                              } catch (e) {
-                                console.error('Failed to mark all as read', e);
-                              }
+                            onClick={() => {
+                              const allIds = visibleNotifications.map(n => n.id);
+                              setHiddenNotifications(new Set([...hiddenNotifications, ...allIds]));
                             }}
-                            style={{ background: 'none', border: 'none', fontSize: '11px', color: 'var(--accent-blue)', cursor: 'pointer', fontWeight: 600 }}
+                            style={{ background: 'none', border: 'none', fontSize: '11px', color: 'var(--accent-red)', cursor: 'pointer', fontWeight: 600 }}
                           >
                             Clear All
                           </button>
                         )}
                       </div>
-                      {visibleNotifications.length === 0 ? (
-                        <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', textAlign: 'center', padding: '16px 10px' }}>Tidak ada notifikasi</div>
-                      ) : (
-                        visibleNotifications.map(n => (
-                          <div
-                            key={n.id}
-                            onClick={async () => {
-                              await fetch('/api/notifications', {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ id: n.id, isRead: true })
-                              });
-                              setNotifications(prev => prev.map(notif => notif.id === n.id ? { ...notif, isRead: true } : notif));
-                              if (n.type === 'GMM_ENTRY') router.push('/dashboard/monitoring');
-                              if (n.type === 'TASK_DONE') {
-                                const titleSplit = n.message.split('DONE: ');
-                                if (titleSplit.length > 1) {
-                                  router.push(`/dashboard/tasks?search=${encodeURIComponent(titleSplit[1].trim())}&status=DONE`);
-                                } else {
-                                  router.push('/dashboard/tasks?status=DONE');
-                                }
-                              }
-                              setShowNotifications(false);
-                            }}
-                            style={{
-                              padding: '10px 10px 10px 24px',
-                              fontSize: '12px',
-                              cursor: 'pointer',
-                              borderBottom: '1px solid var(--border-subtle)',
-                              background: n.isRead ? 'transparent' : 'var(--accent-blue-light)',
-                              borderRadius: '6px',
-                              marginBottom: '6px',
-                              color: n.isRead ? 'var(--text-secondary)' : 'var(--text-primary)',
-                              fontWeight: n.isRead ? 400 : 500,
-                              position: 'relative',
-                              transition: 'var(--transition-fast)'
-                            }}
-                          >
-                            {!n.isRead && (
-                              <span style={{ position: 'absolute', left: '8px', top: '15px', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-blue)' }} />
-                            )}
-                            <div style={{ lineHeight: '1.4' }}>{n.message}</div>
-                            <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', marginTop: '4px', fontWeight: 400 }}>{new Date(n.createdAt).toLocaleString()}</div>
+                      <div style={{ padding: '8px' }}>
+                        {visibleNotifications.length === 0 ? (
+                          <div style={{ fontSize: '13px', color: 'var(--text-tertiary)', textAlign: 'center', padding: '24px 10px' }}>
+                            <div style={{ fontSize: '28px', marginBottom: '8px' }}>📭</div>
+                            Tidak ada notifikasi baru
                           </div>
-                        ))
-                      )}
+                        ) : (
+                          visibleNotifications.map(n => {
+                            const icon = n.type === 'TASK_DONE' ? '✅' : n.type === 'GMM_ENTRY' ? '📊' : '📋';
+                            return (
+                              <div
+                                key={n.id}
+                                onClick={async () => {
+                                  if (!n.isRead) {
+                                    await fetch('/api/notifications', {
+                                      method: 'PATCH',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ id: n.id, isRead: true })
+                                    });
+                                    setNotifications(prev => prev.map(notif => notif.id === n.id ? { ...notif, isRead: true } : notif));
+                                  }
+                                  setShowNotifications(false);
+                                  if (n.type === 'GMM_ENTRY') {
+                                    router.push('/dashboard/monitoring');
+                                  } else {
+                                    // Extract customer name: new format "untuk CUSTOMER_NAME: task"
+                                    const customerMatch = n.message.match(/untuk\s+([^:]+):/i);
+                                    let searchName = customerMatch ? customerMatch[1].trim() : '';
+                                    // If no customer name in message, try to look up via referenceId (task ID)
+                                    if (!searchName && n.referenceId) {
+                                      try {
+                                        const res = await fetch(`/api/tasks/lead-name?taskId=${n.referenceId}`);
+                                        const data = await res.json();
+                                        if (data.customerName) searchName = data.customerName;
+                                      } catch { /* fallback: navigate without search */ }
+                                    }
+                                    router.push(`/dashboard/tasks${searchName ? `?search=${encodeURIComponent(searchName)}` : ''}`);
+                                  }
+                                }}
+                                style={{
+                                  padding: '10px 12px',
+                                  fontSize: '13px',
+                                  cursor: 'pointer',
+                                  background: n.isRead ? 'transparent' : 'var(--accent-blue-light)',
+                                  borderRadius: '8px',
+                                  marginBottom: '4px',
+                                  color: n.isRead ? 'var(--text-secondary)' : 'var(--text-primary)',
+                                  fontWeight: n.isRead ? 400 : 500,
+                                  display: 'flex',
+                                  gap: '10px',
+                                  alignItems: 'flex-start',
+                                  transition: 'background 0.15s'
+                                }}
+                              >
+                                <span style={{ fontSize: '18px', flexShrink: 0, marginTop: '1px' }}>{icon}</span>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ lineHeight: '1.4', wordBreak: 'break-word' }}>{n.message}</div>
+                                  <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px', fontWeight: 400 }}>{new Date(n.createdAt).toLocaleString('id-ID')}</div>
+                                </div>
+                                {!n.isRead && (
+                                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-blue)', flexShrink: 0, marginTop: '6px' }} />
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
 
                   )}

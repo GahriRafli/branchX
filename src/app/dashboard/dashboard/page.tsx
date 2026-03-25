@@ -28,17 +28,24 @@ interface Task {
 
 interface DashboardStats {
   totalTasks: number;
-  todoCount: number;
-  inProgressCount: number;
-  blockerCount: number;
-  doneCount: number;
+  openTasks: number;
+  inProgressTasks: number;
+  doneTasks: number;
+  totalLeads: number;
+  wonLeads: number;
   totalUsers: number;
+  pipelineAmount: number;
+  wonAmount: number;
+  aging: { fresh: number; warning: number; critical: number };
+  leaderboard: { id: string; name: string; wonCount: number; pipelineAmount: number }[];
 }
 
 const CHART_COLORS = {
-  TODO: '#6366f1',
+  FRESH: '#10b981',
+  WARNING: '#f59e0b',
+  CRITICAL: '#ef4444',
+  OPEN: '#6366f1',
   IN_PROGRESS: '#3b82f6',
-  BLOCKER: '#ef4444',
   DONE: '#10b981'
 };
 
@@ -70,17 +77,15 @@ export default function DashboardMainPage() {
   }, [fetchData]);
 
   const pieData = useMemo(() => stats ? [
-    { name: 'To Do', value: stats.todoCount, color: CHART_COLORS.TODO },
-    { name: 'In Progress', value: stats.inProgressCount, color: CHART_COLORS.IN_PROGRESS },
-    { name: 'Blocker', value: stats.blockerCount, color: CHART_COLORS.BLOCKER },
-    { name: 'Done', value: stats.doneCount, color: CHART_COLORS.DONE },
+    { name: 'Fresh (<3d)', value: stats.aging.fresh, color: CHART_COLORS.FRESH },
+    { name: 'Warning (3-7d)', value: stats.aging.warning, color: CHART_COLORS.WARNING },
+    { name: 'Critical (>7d)', value: stats.aging.critical, color: CHART_COLORS.CRITICAL },
   ] : [], [stats]);
 
   const barData = useMemo(() => stats ? [
-    { name: 'To Do', count: stats.todoCount, fill: CHART_COLORS.TODO },
-    { name: 'In Progress', count: stats.inProgressCount, fill: CHART_COLORS.IN_PROGRESS },
-    { name: 'Blocker', count: stats.blockerCount, fill: CHART_COLORS.BLOCKER },
-    { name: 'Done', count: stats.doneCount, fill: CHART_COLORS.DONE },
+    { name: 'Open Tasks', count: stats.openTasks, fill: CHART_COLORS.OPEN },
+    { name: 'In Progress', count: stats.inProgressTasks, fill: CHART_COLORS.IN_PROGRESS },
+    { name: 'Done', count: stats.doneTasks, fill: CHART_COLORS.DONE },
   ] : [], [stats]);
 
   const handleStatusChange = async (taskId: string, newStatus: string) => {
@@ -102,73 +107,81 @@ export default function DashboardMainPage() {
     }
   };
 
+  // Compact currency formatter for dashboard cards
+  const formatCompactCurrency = (amount: number) => {
+    if (amount >= 1_000_000_000_000) return `Rp ${(amount / 1_000_000_000_000).toFixed(1).replace('.', ',')} T`;
+    if (amount >= 1_000_000_000) return `Rp ${(amount / 1_000_000_000).toFixed(1).replace('.', ',')} M`;
+    if (amount >= 1_000_000) return `Rp ${(amount / 1_000_000).toFixed(1).replace('.', ',')} Jt`;
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount);
+  };
+
   if (loading || !stats) return <div className="loading-spinner" />;
 
   return (
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">Monitor team productivity and manage task workflows</p>
+          <h1 className="page-title">CRM Dashboard</h1>
+          <p className="page-subtitle">Monitor pipeline performance and follow-up activities</p>
         </div>
       </div>
 
-      <div className="stats-grid" id="tour-dash-stats">
-        <div className="stat-card indigo" onClick={() => router.push('/dashboard/tasks')} style={{ cursor: 'pointer' }}>
-          <div className="stat-label">Total Tasks</div>
-          <div className="stat-value">{stats.totalTasks}</div>
+      <div className="stats-grid" id="tour-dash-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+        <div className="stat-card indigo" onClick={() => router.push('/dashboard/tasks')} style={{ cursor: 'pointer', padding: '24px', borderRadius: '12px' }}>
+          <div className="stat-label" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>Total Pipeline (Leads)</div>
+          <div className="stat-value" style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px' }}>{stats.totalLeads}</div>
         </div>
-        <div className="stat-card emerald" onClick={() => router.push('/dashboard/tasks?status=DONE')} style={{ cursor: 'pointer' }}>
-          <div className="stat-label">Completed</div>
-          <div className="stat-value">{stats.doneCount}</div>
+        <div className="stat-card emerald" style={{ padding: '24px', borderRadius: '12px' }}>
+          <div className="stat-label" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>Won Value</div>
+          <div className="stat-value" style={{ fontSize: '24px', fontWeight: 700, marginTop: '8px' }} title={new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(stats.wonAmount)}>{formatCompactCurrency(stats.wonAmount)}</div>
         </div>
-        <div className="stat-card amber" onClick={() => router.push('/dashboard/tasks?status=IN_PROGRESS')} style={{ cursor: 'pointer' }}>
-          <div className="stat-label">In Progress</div>
-          <div className="stat-value">{stats.inProgressCount}</div>
+        <div className="stat-card amber" style={{ padding: '24px', borderRadius: '12px' }}>
+          <div className="stat-label" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>Potential Pipeline Value</div>
+          <div className="stat-value" style={{ fontSize: '24px', fontWeight: 700, marginTop: '8px' }} title={new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(stats.pipelineAmount)}>{formatCompactCurrency(stats.pipelineAmount)}</div>
         </div>
-        <div className="stat-card rose" onClick={() => router.push('/dashboard/tasks?status=BLOCKER')} style={{ cursor: 'pointer' }}>
-          <div className="stat-label">Blockers</div>
-          <div className="stat-value">{stats.blockerCount}</div>
+        <div className="stat-card rose" onClick={() => router.push('/dashboard/tasks')} style={{ cursor: 'pointer', padding: '24px', borderRadius: '12px' }}>
+          <div className="stat-label" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>Open Follow-up Tasks</div>
+          <div className="stat-value" style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px' }}>{stats.openTasks}</div>
         </div>
         {isAdmin && (
-          <div className="stat-card cyan" onClick={() => router.push('/dashboard/users')} style={{ cursor: 'pointer' }}>
-            <div className="stat-label">Team Members</div>
-            <div className="stat-value">{stats.totalUsers}</div>
+          <div className="stat-card cyan" onClick={() => router.push('/dashboard/users')} style={{ cursor: 'pointer', padding: '24px', borderRadius: '12px' }}>
+            <div className="stat-label" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>Team Members</div>
+            <div className="stat-value" style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px' }}>{stats.totalUsers}</div>
           </div>
         )}
       </div>
 
-      <div className="charts-grid" id="tour-dash-chart">
-        <div className="chart-card">
-          <div className="chart-title">Task Distribution</div>
-          <ResponsiveContainer width="100%" height={300}>
+      <div className="charts-grid" id="tour-dash-chart" style={{ display: 'grid', gridTemplateColumns: isAdmin ? '1fr 1fr 1fr' : '1fr 1fr', gap: '24px', marginTop: '24px' }}>
+        <div className="chart-card" style={{ background: 'var(--bg-card)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
+          <div className="chart-title" style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Lead Ageing Distribution</div>
+          <ResponsiveContainer width="100%" height={260}>
             <PieChart>
               <Pie data={pieData} cx="50%" cy="50%" innerRadius={65} outerRadius={90} paddingAngle={5} dataKey="value">
                 {pieData.map((entry: any, index: number) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={{ background: '#ffffff', border: 'none', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', padding: '12px' }} />
+              <Tooltip contentStyle={{ background: 'var(--bg-popover)', border: 'none', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)', padding: '12px', color: 'var(--text-primary)' }} />
             </PieChart>
           </ResponsiveContainer>
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '16px', marginTop: '16px', fontSize: '13px' }}>
             {pieData.map((d, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '3px', backgroundColor: d.color }} />
-                <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{d.value}</span> {d.name}
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{d.value}</span> {d.name}
               </div>
             ))}
           </div>
         </div>
 
-        <div className="chart-card">
-          <div className="chart-title">Status Breakdown</div>
+        <div className="chart-card" style={{ background: 'var(--bg-card)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
+          <div className="chart-title" style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Task Completion Tracker</div>
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={barData}>
-              <XAxis dataKey="name" tick={{ fill: '#5e6c84', fontSize: 12 }} />
-              <YAxis tick={{ fill: '#5e6c84', fontSize: 12 }} />
-              <Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #dfe1e6', borderRadius: '8px', boxShadow: '0 4px 8px -2px rgba(9,30,66,0.1)' }} />
-              <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+            <BarChart data={barData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+              <XAxis dataKey="name" tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ background: 'var(--bg-popover)', border: '1px solid var(--border-subtle)', borderRadius: '8px', boxShadow: '0 4px 8px -2px rgba(0,0,0,0.1)', color: 'var(--text-primary)' }} cursor={{ fill: 'var(--bg-main)' }} />
+              <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={60}>
                 {barData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
                 ))}
@@ -176,13 +189,39 @@ export default function DashboardMainPage() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+
+        {isAdmin && (
+           <div className="chart-card" style={{ background: 'var(--bg-card)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
+              <div className="chart-title" style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Top Performers</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                 {stats.leaderboard.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '32px 0' }}>No closed deals yet.</div>
+                 ) : (
+                    stats.leaderboard.map((user, i) => (
+                       <div key={user.id} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: i === 0 ? 'var(--accent-orange-light)' : 'var(--bg-main)', color: i === 0 ? 'var(--accent-orange)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700 }}>
+                             #{i + 1}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                             <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{user.name}</div>
+                             <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{user.wonCount} Won • {new Intl.NumberFormat('id-ID', { notation: 'compact' }).format(user.pipelineAmount)} Pipeline</div>
+                          </div>
+                       </div>
+                    ))
+                 )}
+              </div>
+           </div>
+        )}
       </div>
 
       {!isAdmin && (
         <div className="table-container" id="tour-dash-recent" style={{ marginTop: '32px' }}>
           <div className="table-header">
-            <h2 className="table-title">My Recent Tasks</h2>
-            <p className="page-subtitle" style={{ margin: 0 }}>Showing your currently assigned tasks</p>
+             <div>
+                <h2 className="table-title">My Recent Tasks</h2>
+                <p className="page-subtitle" style={{ margin: 0 }}>Menampilkan {Math.min(tasks.length, 5)} dari {tasks.length} tugas yang ditugaskan</p>
+             </div>
+             <button className="btn btn-secondary btn-sm" onClick={() => router.push('/dashboard/tasks')}>View All CRM Tasks</button>
           </div>
           <div className="data-table-wrapper">
             <table className="data-table">
@@ -196,23 +235,22 @@ export default function DashboardMainPage() {
               </thead>
               <tbody>
                 {tasks.length === 0 ? (
-                  <tr><td colSpan={4} style={{ textAlign: 'center', padding: '32px' }}>No tasks assigned to you</td></tr>
+                  <tr><td colSpan={4} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-tertiary)' }}>No tasks assigned to you</td></tr>
                 ) : (
                   tasks.slice(0, 5).map(task => (
                     <tr key={task.id}>
                       <td>
-                        <div style={{ fontWeight: 500 }}>{task.title}</div>
+                        <div style={{ fontWeight: 600 }}>{task.title}</div>
                         <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{task.description}</div>
                       </td>
                       <td>
                         <select
-                          className={`status-select ${getStatusClass(task.status)}`}
+                          className={`status-select select-${task.status.toLowerCase()}`}
                           value={task.status}
                           onChange={(e) => handleStatusChange(task.id, e.target.value)}
                         >
-                          <option value="TODO">To Do</option>
+                          <option value="OPEN">Open</option>
                           <option value="IN_PROGRESS">In Progress</option>
-                          <option value="BLOCKER">Blocker</option>
                           <option value="DONE">Done</option>
                         </select>
                       </td>

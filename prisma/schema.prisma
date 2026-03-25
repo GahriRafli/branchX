@@ -21,6 +21,7 @@ model User {
   monitoringEntries     MonitoringGMM[]
   notifications         Notification[]
   tasks                 Task[]
+  leads                 Lead[]
 }
 
 model Notification {
@@ -54,11 +55,69 @@ model Task {
   id          String   @id @default(cuid())
   title       String
   description String   @default("")
-  status      String   @default("TODO")
+  status      String   @default("OPEN")
   priority    String   @default("MEDIUM")
   sourceFile  String   @default("")
+  leadId      String?
+  lead        Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
   assigneeId  String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   assignee    User?    @relation(fields: [assigneeId], references: [id])
+}
+
+enum LeadType {
+  INTENSIFICATION
+  EXTENSIFICATION
+  BOTTOM_UP
+}
+
+enum LeadStatus {
+  NEW
+  READY_TO_FOLLOW_UP
+  CONTACTED
+  IN_DISCUSSION
+  WAITING_CUSTOMER
+  NEED_SUPPORT
+  WON
+  LOST
+  DORMANT
+}
+
+model Lead {
+  id                   String      @id @default(cuid())
+  lead_name            String
+  cif                  String?
+  lead_type            LeadType
+  branch               String?
+  potential_amount     Float       @default(0)
+  owner_user_id        String?
+  owner                User?       @relation(fields: [owner_user_id], references: [id])
+  status               LeadStatus  @default(NEW)
+  priority             String      @default("MEDIUM")
+  lead_category        String?
+  area                 String?
+  area_name            String?
+  branch_code          String?
+  three_p              String?     @default("Pebisnis")
+  closing_amount       Float       @default(0)
+  keterangan           String?
+  next_action          String?
+  support_needed       String?
+  last_activity_at     DateTime?
+  source_upload_batch  String?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  
+  tasks                Task[]
+}
+
+model UploadBatch {
+  id           String   @id @default(cuid())
+  filename     String
+  uploader_id  String
+  total_rows   Int
+  valid_rows   Int
+  invalid_rows Int
+  created_at   DateTime @default(now())
 }
