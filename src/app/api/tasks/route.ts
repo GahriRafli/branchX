@@ -15,7 +15,7 @@ export async function GET() {
     const tasks = await prisma.task.findMany({
       where,
       include: { assignee: { select: { id: true, name: true, nip: true } } },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
     });
 
     return NextResponse.json({ tasks });
@@ -86,6 +86,12 @@ export async function PATCH(request: Request) {
 
     if (!existingTask) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
+    }
+
+    // Auto-delete task if status is CANCELLED
+    if (status === 'CANCELLED') {
+      await prisma.task.delete({ where: { id } });
+      return NextResponse.json({ deleted: true, message: 'Task telah dihapus karena status CANCELLED' });
     }
 
     const task = await prisma.task.update({

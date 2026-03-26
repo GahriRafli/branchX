@@ -82,6 +82,8 @@ enum LeadStatus {
   WON
   LOST
   DORMANT
+  CANCELLED
+  KICK
 }
 
 model Lead {

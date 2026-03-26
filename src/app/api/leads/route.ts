@@ -33,10 +33,10 @@ export async function GET(request: Request) {
         owner: { select: { id: true, name: true } },
         tasks: includeTasks ? {
           include: { assignee: { select: { id: true, name: true } } },
-          orderBy: { createdAt: 'desc' }
+          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }]
         } : false
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
     });
 
     return NextResponse.json({ leads });
@@ -63,6 +63,15 @@ export async function PATCH(request: Request) {
     // Users can only update their own leads, Admin can update anything
     if (session.role !== 'ADMIN' && existingLead.owner_user_id !== session.userId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Auto-delete lead + tasks if status is CANCELLED or KICK
+    if (status === 'CANCELLED' || status === 'KICK') {
+      // Delete all tasks associated with this lead first
+      await prisma.task.deleteMany({ where: { leadId: id } });
+      // Delete the lead itself
+      await prisma.lead.delete({ where: { id } });
+      return NextResponse.json({ deleted: true, message: `Lead telah dihapus karena status ${status}` });
     }
 
     const updateData: any = { last_activity_at: new Date() };
