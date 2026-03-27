@@ -5,10 +5,9 @@ import { useAuth } from '../layout';
 import { useRouter } from 'next/navigation';
 
 export default function UploadPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, showToast } = useAuth();
   const router = useRouter();
   const [uploading, setUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [previewData, setPreviewData] = useState<any>(null);
   const [confirming, setConfirming] = useState(false);
   const [selectedFilename, setSelectedFilename] = useState('');
@@ -37,7 +36,6 @@ export default function UploadPage() {
     if (!file) return;
 
     setUploading(true);
-    setUploadResult(null);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -47,13 +45,14 @@ export default function UploadPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setUploadResult({ type: 'error', message: data.error });
+        showToast('Upload Error', data.error || 'Parsing failed', 'error');
       } else {
         setPreviewData(data);
         setSelectedFilename(file.name);
+        showToast('Success', 'File parsed successfully. Please review the preview.', 'success');
       }
     } catch {
-      setUploadResult({ type: 'error', message: 'Parsing failed' });
+      showToast('Error', 'An unexpected error occurred during upload', 'error');
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -62,7 +61,6 @@ export default function UploadPage() {
 
   const handleConfirmImport = async () => {
      setConfirming(true);
-     setUploadResult(null);
      
      try {
         const res = await fetch('/api/upload-leads/confirm', { 
@@ -73,15 +71,14 @@ export default function UploadPage() {
         const data = await res.json();
         
         if (!res.ok) {
-           setUploadResult({ type: 'error', message: data.error });
+           showToast('Import Error', data.error || 'Import failed', 'error');
         } else {
-           setUploadResult({ type: 'success', message: data.message });
+           showToast('Import Complete', data.message || 'Leads imported successfully', 'success');
            setPreviewData(null);
            fetchHistory();
-           setTimeout(() => setUploadResult(null), 8000);
         }
      } catch(e) {
-        setUploadResult({ type: 'error', message: 'Import failed' });
+        showToast('Error', 'An unexpected error occurred during import', 'error');
      } finally {
         setConfirming(false);
      }
@@ -101,11 +98,6 @@ export default function UploadPage() {
         </div>
       </div>
 
-      {uploadResult && (
-        <div className={`notification ${uploadResult.type}`} style={{ marginBottom: '24px' }}>
-          {uploadResult.type === 'success' ? '✅' : '❌'} {uploadResult.message}
-        </div>
-      )}
 
       {!previewData ? (
         <div className="upload-zone" id="tour-upload-zone" style={{ position: 'relative' }}>

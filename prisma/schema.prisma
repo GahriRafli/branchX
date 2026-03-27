@@ -18,7 +18,7 @@ model User {
   currentSessionId      String?
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
-  monitoringEntries     MonitoringGMM[]
+  monitoringEntries     MonitoringActivity[]
   notifications         Notification[]
   tasks                 Task[]
   leads                 Lead[]
@@ -35,20 +35,23 @@ model Notification {
   createdAt   DateTime @default(now())
 }
 
-model MonitoringGMM {
+model MonitoringActivity {
   id           String   @id @default(cuid())
+  activityType String   @default("GMM")
   name         String
   codeReferral String
-  product      String
+  product      String   @default("")
   amount       Float    @default(0)
   target       Float    @default(0)
-  total        Float    @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  total       Float    @default(0)
   noAccount    String   @default("")
+  bookingId    String   @default("")
+  branchCode   String   @default("")
   status       String   @default("PENDING")
   userId       String?
   user         User?    @relation(fields: [userId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Task {
@@ -84,6 +87,7 @@ enum LeadStatus {
   DORMANT
   CANCELLED
   KICK
+  NEED_FU
 }
 
 model Lead {

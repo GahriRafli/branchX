@@ -64,10 +64,23 @@ function TasksPageContent() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editingLead, setEditingLead] = useState<any | null>(null);
   const [taskForm, setTaskForm] = useState({ title: '', description: '', priority: 'MEDIUM', status: 'TODO', assigneeId: '', leadId: '' });
-  const [leadForm, setLeadForm] = useState({ status: 'NEW', priority: 'MEDIUM', owner_user_id: '', support_needed: '' });
+  const [leadForm, setLeadForm] = useState({ status: 'NEW', priority: 'MEDIUM', owner_user_id: '', support_needed: '', keterangan: '' });
   const [assignModal, setAssignModal] = useState<{ taskId: string; currentAssigneeId: string | null } | null>(null);
   const [bulkDeleteModal, setBulkDeleteModal] = useState<boolean>(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [showConfirmModal, setShowConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    action: () => void;
+    type: 'success' | 'danger' | 'warning';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    action: () => { },
+    type: 'success'
+  });
 
   useEffect(() => {
     const s = searchParams.get('status');
@@ -187,9 +200,9 @@ function TasksPageContent() {
       const data = await res.json();
       fetchData();
       if (data.deleted) {
-        showToast('Task Dihapus', 'Task telah otomatis dihapus karena status Cancelled', 'warning');
+        showToast('Task Deleted', 'Task was automatically deleted due to Cancelled status', 'warning');
       } else {
-        showToast('Status Updated', `Task status changed to ${newStatus}`);
+        showToast('Updated', `Task status changed to ${newStatus}`, 'success');
       }
     } catch {
       showToast('Error', 'Failed to update task status', 'error');
@@ -210,9 +223,9 @@ function TasksPageContent() {
         setShowLeadModal(false);
         fetchData();
         if (data.deleted) {
-          showToast('Lead Dihapus', `Lead beserta task-nya telah otomatis dihapus karena status ${leadForm.status}`, 'warning');
+          showToast('Lead Deleted', `Lead and its tasks were automatically deleted due to ${leadForm.status} status`, 'warning');
         } else {
-          showToast('Success', 'Lead updated successfully');
+          showToast('Success', 'Lead updated successfully', 'success');
         }
       } else throw new Error();
     } catch { showToast('Error', 'Failed to update Lead', 'error'); }
@@ -227,18 +240,25 @@ function TasksPageContent() {
       });
       setAssignModal(null);
       fetchData();
-      showToast('Assigned', 'Task assignment updated successfully');
+      showToast('Assigned', 'Task assignment updated successfully', 'success');
     } catch { showToast('Error', 'Failed to assign task', 'error'); }
   };
 
-  const handleDelete = async () => {
-    if (!showDeleteModal) return;
-    try {
-      await fetch(`/api/tasks?id=${showDeleteModal}`, { method: 'DELETE' });
-      setShowDeleteModal(null);
-      fetchData();
-      showToast('Task Deleted', 'The task has been deleted.', 'warning');
-    } catch { showToast('Error', 'Failed to delete task', 'error'); }
+  const handleDelete = async (id: string) => {
+    setShowConfirmModal({
+      visible: true,
+      title: 'Delete Task',
+      message: 'Are you sure you want to delete this task? This action cannot be undone.',
+      type: 'danger',
+      action: async () => {
+        try {
+          await fetch(`/api/tasks?id=${id}`, { method: 'DELETE' });
+          fetchData();
+          showToast('Deleted', 'The task has been deleted', 'warning');
+        } catch { showToast('Error', 'Failed to delete task', 'error'); }
+        setShowConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
   };
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -260,16 +280,24 @@ function TasksPageContent() {
   };
 
   const handleBulkDelete = async () => {
-    setLoading(true);
-    try {
-      await Promise.all(Array.from(selectedTaskIds).map(id =>
-        fetch(`/api/tasks?id=${id}`, { method: 'DELETE' })
-      ));
-      showToast('Bulk Delete', `${selectedTaskIds.size} tasks have been deleted.`, 'warning');
-      setSelectedTaskIds(new Set());
-      setBulkDeleteModal(false);
-      fetchData();
-    } catch { showToast('Error', 'Failed to delete tasks', 'error'); setLoading(false); }
+    setShowConfirmModal({
+      visible: true,
+      title: 'Bulk Delete Tasks',
+      message: `Are you sure you want to delete ${selectedTaskIds.size} selected tasks? This action cannot be undone.`,
+      type: 'danger',
+      action: async () => {
+        setLoading(true);
+        try {
+          await Promise.all(Array.from(selectedTaskIds).map(id =>
+            fetch(`/api/tasks?id=${id}`, { method: 'DELETE' })
+          ));
+          showToast('Bulk Delete', `${selectedTaskIds.size} tasks have been deleted`, 'warning');
+          setSelectedTaskIds(new Set());
+          fetchData();
+        } catch { showToast('Error', 'Failed to delete tasks', 'error'); setLoading(false); }
+        setShowConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
   };
 
   const handleBulkStatusUpdate = async (newStatus: string) => {
@@ -283,7 +311,7 @@ function TasksPageContent() {
           body: JSON.stringify({ id, status: newStatus }),
         })
       ));
-      showToast('Bulk Update', `Status of ${selectedTaskIds.size} tasks updated to ${newStatus}.`);
+      showToast('Bulk Update', `Status of ${selectedTaskIds.size} tasks updated to ${newStatus}`, 'success');
       setSelectedTaskIds(new Set());
       fetchData();
     } catch { showToast('Error', 'Failed to update tasks', 'error'); setLoading(false); }
@@ -301,7 +329,7 @@ function TasksPageContent() {
           body: JSON.stringify({ id, assigneeId: payloadAssigneeId }),
         })
       ));
-      showToast('Bulk Assign', `${selectedTaskIds.size} tasks assigned successfully.`);
+      showToast('Bulk Assign', `${selectedTaskIds.size} tasks assigned successfully`, 'success');
       setSelectedTaskIds(new Set());
       fetchData();
     } catch { showToast('Error', 'Failed to assign tasks', 'error'); setLoading(false); }
@@ -312,10 +340,11 @@ function TasksPageContent() {
 
     if (viewMode === 'GROUPED') {
       const exportData = filteredLeads.map((l, idx) => {
-        const isContacted = ['CONTACTED', 'IN_DISCUSSION', 'WAITING_CUSTOMER', 'WON', 'LOST'].includes(l.status) ? 'Sudah' : 'Belum';
+        const isContacted = ['CONTACTED', 'IN_DISCUSSION', 'WAITING_CUSTOMER', 'WON', 'LOST', 'NEED_FU'].includes(l.status) ? 'Sudah' : 'Belum';
         let hasilFU = '';
         if (l.status === 'WON') hasilFU = 'Closing';
-        if (l.status === 'LOST') hasilFU = 'Gagal/Tidak Berminat';
+        if (l.status === 'LOST') hasilFU = 'Tidak Berminat';
+        if (l.status === 'NEED_FU') hasilFU = 'Need FU';
 
         return {
           'No': idx + 1,
@@ -386,7 +415,7 @@ function TasksPageContent() {
       if (res.ok) {
         setShowTaskModal(false);
         fetchData();
-        showToast('Success', editingTask ? 'Task updated successfully' : 'New task created successfully');
+        showToast('Success', editingTask ? 'Task updated successfully' : 'New task created successfully', 'success');
       } else throw new Error();
     } catch { showToast('Error', 'Failed to save task', 'error'); }
   };
@@ -395,69 +424,100 @@ function TasksPageContent() {
 
   return (
     <>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
-          <h1 className="page-title">{isAdmin ? 'All CRM Framework' : 'My Follow-Ups'}</h1>
-          <p className="page-subtitle">{viewMode === 'FLAT' ? `${filteredTasks.length} tasks found` : `${filteredLeads.length} leads found`}</p>
+          <h1 className="page-title" style={{ fontSize: '28px', fontWeight: 800, background: 'linear-gradient(135deg, var(--text-primary), #64748b)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            {isAdmin ? 'All CRM Framework' : 'My Follow-Ups'}
+          </h1>
+          <p className="page-subtitle" style={{ fontSize: '14px', marginTop: '4px' }}>
+            {viewMode === 'FLAT' ? `${filteredTasks.length} tasks found` : `${filteredLeads.length} leads found`}
+          </p>
         </div>
-        <div id="tour-view-toggle" style={{ display: 'flex', background: 'var(--bg-card)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+        <div id="tour-view-toggle" style={{
+          display: 'flex',
+          background: 'var(--bg-card)',
+          padding: '4px',
+          borderRadius: '12px',
+          border: '1px solid var(--border-subtle)',
+          minWidth: '320px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+        }}>
           <button
             className={`btn btn-sm ${viewMode === 'GROUPED' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ border: 'none', background: viewMode === 'GROUPED' ? 'var(--accent-blue)' : 'transparent', color: viewMode === 'GROUPED' ? '#fff' : 'var(--text-secondary)' }}
+            style={{ flex: 1, border: 'none', background: viewMode === 'GROUPED' ? 'var(--accent-blue)' : 'transparent', color: viewMode === 'GROUPED' ? '#fff' : 'var(--text-secondary)', padding: '8px', borderRadius: '8px', fontWeight: 600 }}
             onClick={() => setViewMode('GROUPED')}
-          >🏢 Grouped by Leads</button>
+          >🏢 Grouped</button>
           <button
             className={`btn btn-sm ${viewMode === 'FLAT' ? 'btn-primary' : 'btn-secondary'}`}
-            style={{ border: 'none', background: viewMode === 'FLAT' ? 'var(--accent-blue)' : 'transparent', color: viewMode === 'FLAT' ? '#fff' : 'var(--text-secondary)' }}
+            style={{ flex: 1, border: 'none', background: viewMode === 'FLAT' ? 'var(--accent-blue)' : 'transparent', color: viewMode === 'FLAT' ? '#fff' : 'var(--text-secondary)', padding: '8px', borderRadius: '8px', fontWeight: 600 }}
             onClick={() => setViewMode('FLAT')}
-          >📋 All Tasks List</button>
+          >📋 List View</button>
         </div>
       </div>
 
       {/* Export & Date Filter Toolbar */}
       <div id="tour-export-toolbar" className="export-toolbar" style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px',
-        background: 'var(--bg-card)', borderRadius: '12px', padding: '14px 20px',
-        border: '1px solid var(--border-subtle)', marginTop: '12px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px',
+        background: 'var(--bg-card)', borderRadius: '16px', padding: '16px 20px',
+        border: '1px solid var(--border-subtle)', marginBottom: '24px',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
       }}>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)' }}>📅 Periode Export:</span>
-          <input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setPage(1); setLeadPage(1); }}
-            style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', padding: '6px 10px', borderRadius: '6px', fontSize: '13px', outline: 'none' }} />
-          <span style={{ color: 'var(--text-tertiary)', fontSize: '13px' }}>sampai</span>
-          <input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); setPage(1); setLeadPage(1); }}
-            style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', padding: '6px 10px', borderRadius: '6px', fontSize: '13px', outline: 'none' }} />
+        <div style={{ display: 'flex', gap: '24px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>📅</div>
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Periode Export</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                <input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setPage(1); setLeadPage(1); }}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, padding: 0, width: '120px' }} />
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>-</span>
+                <input type="date" value={endDate} onChange={e => { setEndDate(e.target.value); setPage(1); setLeadPage(1); }}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, padding: 0, width: '120px' }} />
+              </div>
+            </div>
+          </div>
+
           {(startDate || endDate) && (
             <button
               onClick={() => { setStartDate(''); setEndDate(''); }}
-              style={{ background: 'var(--accent-red)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '11px', padding: '4px 10px', borderRadius: '4px', fontWeight: 600 }}
-            >✕ Reset</button>
+              style={{ background: '#f43f5e', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '11px', padding: '4px 12px', borderRadius: '6px', fontWeight: 700, textTransform: 'uppercase' }}
+            >Reset Filter</button>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div>
           <button onClick={() => handleExport('excel')} style={{
-            padding: '8px 16px', background: 'linear-gradient(135deg, #107c41, #1a9e54)', color: '#fff', border: 'none',
-            borderRadius: '8px', fontWeight: 600, display: 'flex', gap: '6px', alignItems: 'center', cursor: 'pointer',
-            fontSize: '13px', boxShadow: '0 2px 6px rgba(16,124,65,0.3)', transition: 'all 0.2s'
+            padding: '10px 20px', background: 'rgba(16, 124, 65, 0.1)', color: '#107c41', border: 'none',
+            borderRadius: '10px', fontWeight: 700, display: 'flex', gap: '8px', alignItems: 'center', cursor: 'pointer',
+            fontSize: '13px', transition: 'all 0.2s'
           }}>
-            📊 Export Excel
+            <span style={{ fontSize: '18px' }}>📊</span> Export Excel
           </button>
         </div>
       </div>
 
       {viewMode === 'GROUPED' ? (
-        <div className="leads-container" style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
-          <div className="table-actions" style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-            <select className="filter-input" style={{ width: '220px' }} value={leadSortField} onChange={e => { setLeadSortField(e.target.value as any); setLeadPage(1); }}>
-              <option value="createdAt">Sort by Date Added</option>
-              <option value="potential_amount">Sort by Potential Amount</option>
-            </select>
-            <select className="filter-input" style={{ width: '220px' }} value={leadSortOrder} onChange={e => { setLeadSortOrder(e.target.value as any); setLeadPage(1); }}>
-              <option value="desc">Highest / Newest First</option>
-              <option value="asc">Lowest / Oldest First</option>
-            </select>
-            <input className="search-input" placeholder="Search leads by name or branch..." value={search} onChange={e => { setSearch(e.target.value); setLeadPage(1); }} style={{ width: '100%' }} />
+        <div className="leads-container" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="table-actions" style={{
+            display: 'flex',
+            gap: '12px',
+            marginBottom: '4px',
+            flexWrap: 'wrap',
+            padding: '8px 4px'
+          }}>
+            <div style={{ display: 'flex', gap: '12px', flex: 2, minWidth: '300px' }}>
+              <select className="filter-input" style={{ flex: 1 }} value={leadSortField} onChange={e => { setLeadSortField(e.target.value as any); setLeadPage(1); }}>
+                <option value="createdAt">Filter: Tanggal Ditambahkan</option>
+                <option value="potential_amount">Filter: Nominal Potensi</option>
+              </select>
+              <select className="filter-input" style={{ flex: 1 }} value={leadSortOrder} onChange={e => { setLeadSortOrder(e.target.value as any); setLeadPage(1); }}>
+                <option value="desc">Urutan: Tertinggi / Terbaru</option>
+                <option value="asc">Urutan: Terendah / Terlama</option>
+              </select>
+            </div>
+            <div style={{ position: 'relative', flex: 3, minWidth: '300px' }}>
+              <input className="search-input" placeholder="Cari nama lead atau cabang..." value={search} onChange={e => { setSearch(e.target.value); setLeadPage(1); }} style={{ width: '100%', paddingLeft: '40px' }} />
+              <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', fontSize: '18px', opacity: 0.5 }}></span>
+            </div>
           </div>
           {paginatedLeads.map(lead => {
             const isExpanded = expandedLeads.has(lead.id);
@@ -496,7 +556,7 @@ function TasksPageContent() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', fontSize: '12px', color: 'var(--text-tertiary)' }}>
                       <span style={{ fontWeight: 700, color: 'var(--text-secondary)', fontSize: '14px' }}>{completedCount}/{lead.tasks.length}</span>
                       <span>Tasks Completed</span>
@@ -504,19 +564,23 @@ function TasksPageContent() {
                     <button className="btn btn-secondary btn-sm" onClick={(e) => {
                       e.stopPropagation();
                       setEditingLead(lead);
-                      setLeadForm({ status: lead.status, priority: lead.priority, owner_user_id: lead.owner_user_id || '', support_needed: lead.support_needed || '' });
+                      setLeadForm({ 
+                        status: lead.status, 
+                        priority: lead.priority, 
+                        owner_user_id: lead.owner_user_id || '', 
+                        support_needed: lead.support_needed || '',
+                        keterangan: lead.keterangan || ''
+                      });
                       setShowLeadModal(true);
                     }}>Edit CRM Lead</button>
-                    <div style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: '0.2s', fontSize: '18px', color: 'var(--text-tertiary)' }}>▼</div>
+                    <div className="hide-mobile" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: '0.2s', fontSize: '18px', color: 'var(--text-tertiary)' }}>▼</div>
                   </div>
                 </div>
 
                 {isExpanded && (
                   <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '20px 24px', background: 'var(--bg-main)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'center' }}>
-                      <div>
-                        <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>Activity & Sub-tasks</h4>
-                      </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                      <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>Activity & Sub-tasks</h4>
                       {isAdmin && (
                         <button className="btn btn-primary btn-sm" onClick={() => {
                           setEditingTask(null);
@@ -630,20 +694,20 @@ function TasksPageContent() {
                     </select>
                   )}
                   {isAdmin && (
-                    <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: '11px', background: 'transparent', color: 'var(--accent-red)', border: '1px solid var(--accent-red)' }} onClick={() => setBulkDeleteModal(true)}>Delete All</button>
+                    <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: '11px', background: 'transparent', color: 'var(--accent-red)', border: '1px solid var(--accent-red)' }} onClick={handleBulkDelete}>Delete All</button>
                   )}
                 </div>
               )}
             </div>
-            <div className="table-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <div className="table-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', flexWrap: 'wrap' }}>
               {isAdmin && (
-                <button id="tour-tasks-add" className="btn btn-primary btn-sm" onClick={() => {
+                <button id="tour-tasks-add" className="btn btn-primary btn-sm" style={{ flex: 1, minWidth: '120px' }} onClick={() => {
                   setEditingTask(null);
                   setTaskForm({ title: '', description: '', priority: 'MEDIUM', status: 'OPEN', assigneeId: '', leadId: '' });
                   setShowTaskModal(true);
                 }}>Add Task</button>
               )}
-              <input className="search-input" placeholder="Search tasks..." value={search} onChange={e => setSearch(e.target.value)} />
+              <input className="search-input" placeholder="Search tasks..." value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 2, minWidth: '200px' }} />
             </div>
           </div>
 
@@ -736,7 +800,7 @@ function TasksPageContent() {
                           setTaskForm({ title: task.title, description: task.description || '', priority: task.priority, status: task.status, assigneeId: task.assigneeId || '', leadId: '' });
                           setShowTaskModal(true);
                         }}>Edit</button>}
-                        {isAdmin && <button className="btn btn-danger btn-sm" onClick={() => setShowDeleteModal(task.id)}>Delete</button>}
+                        {isAdmin && <button className="btn btn-danger btn-sm" onClick={() => handleDelete(task.id)}>Delete</button>}
                       </div>
                     </td>
                   </tr>
@@ -753,6 +817,51 @@ function TasksPageContent() {
             itemsPerPage={pageSize}
             itemName="tasks"
           />
+        </div>
+      )}
+
+      {showConfirmModal.visible && (
+        <div className="modal-overlay" style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 2000 }} onClick={() => setShowConfirmModal(prev => ({ ...prev, visible: false }))}>
+          <div className="modal-content" style={{ maxWidth: '400px', borderRadius: '24px', padding: '32px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <div style={{
+              fontSize: '48px',
+              marginBottom: '20px',
+              background: showConfirmModal.type === 'danger' ? 'rgba(244, 63, 94, 0.1)' :
+                showConfirmModal.type === 'warning' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 24px'
+            }}>
+              {showConfirmModal.type === 'danger' ? '⚠️' : '❓'}
+            </div>
+            <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '12px', color: 'var(--text-primary)' }}>{showConfirmModal.title}</h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '32px' }}>{showConfirmModal.message}</p>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                className="btn btn-secondary"
+                style={{ flex: 1, borderRadius: '12px', padding: '12px', fontWeight: 600 }}
+                onClick={() => setShowConfirmModal(prev => ({ ...prev, visible: false }))}
+              >Cancel</button>
+              <button
+                className="btn"
+                style={{
+                  flex: 1,
+                  borderRadius: '12px',
+                  padding: '12px',
+                  fontWeight: 600,
+                  background: showConfirmModal.type === 'danger' ? '#f43f5e' :
+                    showConfirmModal.type === 'warning' ? '#f59e0b' : '#10b981',
+                  color: 'white',
+                  border: 'none'
+                }}
+                onClick={showConfirmModal.action}
+              >Confirm</button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -815,19 +924,33 @@ function TasksPageContent() {
               <div className="form-group">
                 <label>Lead Status</label>
                 <select className="form-select" value={leadForm.status} onChange={e => setLeadForm({ ...leadForm, status: e.target.value })}>
-                  <option value="NEW">New</option>
+                   <option value="NEW">New</option>
                   <option value="READY_TO_FOLLOW_UP">Ready to Follow Up</option>
                   <option value="CONTACTED">Contacted</option>
                   <option value="IN_DISCUSSION">In Discussion</option>
                   <option value="WAITING_CUSTOMER">Waiting Customer</option>
                   <option value="NEED_SUPPORT">Need Support</option>
                   <option value="WON">Won (Deal)</option>
-                  <option value="LOST">Lost / Failed</option>
+                  <option value="LOST">Tidak Berminat</option>
                   <option value="DORMANT">Dormant</option>
-                  <option value="CANCELLED">❌ Cancelled</option>
-                  <option value="KICK">🚫 Kick (Hapus Lead)</option>
+                  <option value="CANCELLED">❌ Cancelled / Take out</option>
+                  <option value="KICK">🚫 Take out (Kick)</option>
+                  <option value="NEED_FU">Need FU</option>
                 </select>
               </div>
+
+              {(['CANCELLED', 'KICK', 'LOST', 'NEED_FU'].includes(leadForm.status)) && (
+                <div className="form-group">
+                  <label>Keterangan</label>
+                  <textarea 
+                    className="form-input" 
+                    placeholder="Masukkan keterangan (wajib untuk status ini)..." 
+                    value={leadForm.keterangan} 
+                    onChange={e => setLeadForm({ ...leadForm, keterangan: e.target.value })}
+                    required 
+                  />
+                </div>
+              )}
               <div className="form-group">
                 <label>Priority / Escaping Constraint</label>
                 <select className="form-select" value={leadForm.priority} onChange={e => setLeadForm({ ...leadForm, priority: e.target.value })}>
@@ -880,35 +1003,6 @@ function TasksPageContent() {
             <div className="modal-actions">
               <button className="btn btn-secondary btn-sm" onClick={() => setAssignModal(null)}>Cancel</button>
               <button className="btn btn-primary btn-sm" onClick={() => handleAssign(assignModal.taskId, assignModal.currentAssigneeId)}>Assign</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Delete Modal */}
-      {showDeleteModal && (
-        <div className="modal-overlay" onClick={() => setShowDeleteModal(null)}>
-          <div className="modal-content" style={{ maxWidth: '400px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: '48px', color: 'var(--accent-red)', marginBottom: '16px' }}>⚠️</div>
-            <h2 className="modal-title">Delete Task</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>Are you sure you want to delete this task? This action cannot be undone.</p>
-            <div className="modal-actions" style={{ justifyContent: 'center' }}>
-              <button className="btn btn-secondary" onClick={() => setShowDeleteModal(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={handleDelete}>Delete Permanently</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Delete Modal */}
-      {bulkDeleteModal && (
-        <div className="modal-overlay" onClick={() => setBulkDeleteModal(false)}>
-          <div className="modal-content" style={{ maxWidth: '400px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: '48px', color: 'var(--accent-red)', marginBottom: '16px' }}>⚠️</div>
-            <h2 className="modal-title">Hapus Massal</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>Are you sure you want to delete <strong>{selectedTaskIds.size} tasks</strong> simultaneously? This action cannot be undone.</p>
-            <div className="modal-actions" style={{ justifyContent: 'center' }}>
-              <button className="btn btn-secondary" onClick={() => setBulkDeleteModal(false)} disabled={loading}>Cancel</button>
-              <button className="btn btn-danger" onClick={handleBulkDelete} disabled={loading}>{loading ? 'Deleting...' : 'Delete All Permanently'}</button>
             </div>
           </div>
         </div>

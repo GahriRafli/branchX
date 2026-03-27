@@ -13,7 +13,7 @@ interface UserListItem {
 }
 
 export default function UsersPage() {
-  const { isAdmin, user: currentUser } = useAuth();
+  const { isAdmin, user: currentUser, showToast } = useAuth();
   const router = useRouter();
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,7 +22,19 @@ export default function UsersPage() {
   const [userForm, setUserForm] = useState({ name: '', nip: '', password: '', role: 'USER', can_access_monitoring: false });
   const [error, setError] = useState('');
 
-  const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    action: () => void;
+    type: 'success' | 'danger' | 'warning';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    action: () => {},
+    type: 'success'
+  });
 
   const fetchUsers = useCallback(async () => {
     const res = await fetch('/api/users');
@@ -58,22 +70,40 @@ export default function UsersPage() {
     const data = await res.json();
     if (!res.ok) {
       setError(data.error || 'Failed to save user');
+      showToast('Error', data.error || 'Failed to save user', 'error');
     } else {
       setShowUserModal(false);
       fetchUsers();
+      showToast('Success', `User ${editingUser ? 'updated' : 'added'} successfully`, 'success');
     }
   };
 
-  const handleDeleteUser = async () => {
-    if (!showDeleteModal) return;
-    if (showDeleteModal === currentUser?.id) {
-      alert('You cannot delete yourself');
-      setShowDeleteModal(null);
+  const handleDeleteUser = async (id: string) => {
+    if (id === currentUser?.id) {
+      showToast('Action Denied', 'You cannot delete yourself', 'error');
       return;
     }
-    await fetch(`/api/users?id=${showDeleteModal}`, { method: 'DELETE' });
-    setShowDeleteModal(null);
-    fetchUsers();
+
+    setShowConfirmModal({
+      visible: true,
+      title: 'Delete User',
+      message: 'Are you sure you want to delete this user? This action cannot be undone.',
+      type: 'danger',
+      action: async () => {
+        try {
+          const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
+          if (res.ok) {
+            fetchUsers();
+            showToast('Deleted', 'User has been removed', 'warning');
+          } else {
+            showToast('Error', 'Failed to delete user', 'error');
+          }
+        } catch {
+          showToast('Error', 'An unexpected error occurred', 'error');
+        }
+        setShowConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
   };
 
   if (!isAdmin) return null;
@@ -116,7 +146,7 @@ export default function UsersPage() {
                         setUserForm({ name: u.name, nip: u.nip, role: u.role, password: '', can_access_monitoring: u.can_access_monitoring });
                         setShowUserModal(true);
                     }}>Edit</button>
-                    {u.id !== currentUser?.id && <button className="btn btn-danger btn-sm" onClick={() => setShowDeleteModal(u.id)}>Delete</button>}
+                    {u.id !== currentUser?.id && <button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(u.id)}>Delete</button>}
                   </div>
                 </td>
               </tr>
@@ -168,15 +198,46 @@ export default function UsersPage() {
         </div>
       )}
 
-      {showDeleteModal && (
-        <div className="modal-overlay" onClick={() => setShowDeleteModal(null)}>
-          <div className="modal-content" style={{ maxWidth: '400px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: '48px', color: 'var(--accent-red)', marginBottom: '16px' }}>⚠️</div>
-            <h2 className="modal-title">Delete User</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>Are you sure you want to delete this user? This action cannot be undone.</p>
-            <div className="modal-actions" style={{ justifyContent: 'center' }}>
-              <button className="btn btn-secondary" onClick={() => setShowDeleteModal(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={handleDeleteUser}>Delete Permanently</button>
+      {showConfirmModal.visible && (
+        <div className="modal-overlay" style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 2000 }} onClick={() => setShowConfirmModal(prev => ({ ...prev, visible: false }))}>
+          <div className="modal-content" style={{ maxWidth: '400px', borderRadius: '24px', padding: '32px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <div style={{ 
+              fontSize: '48px', 
+              marginBottom: '20px',
+              background: showConfirmModal.type === 'danger' ? 'rgba(244, 63, 94, 0.1)' : 
+                         showConfirmModal.type === 'warning' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 24px'
+            }}>
+              {showConfirmModal.type === 'danger' ? '⚠️' : '❓'}
+            </div>
+            <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '12px', color: 'var(--text-primary)' }}>{showConfirmModal.title}</h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '32px' }}>{showConfirmModal.message}</p>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button 
+                className="btn btn-secondary" 
+                style={{ flex: 1, borderRadius: '12px', padding: '12px', fontWeight: 600 }}
+                onClick={() => setShowConfirmModal(prev => ({ ...prev, visible: false }))}
+              >Cancel</button>
+              <button 
+                className="btn" 
+                style={{ 
+                  flex: 1, 
+                  borderRadius: '12px', 
+                  padding: '12px', 
+                  fontWeight: 600,
+                  background: showConfirmModal.type === 'danger' ? '#f43f5e' : 
+                             showConfirmModal.type === 'warning' ? '#f59e0b' : '#10b981',
+                  color: 'white',
+                  border: 'none'
+                }}
+                onClick={showConfirmModal.action}
+              >Confirm</button>
             </div>
           </div>
         </div>

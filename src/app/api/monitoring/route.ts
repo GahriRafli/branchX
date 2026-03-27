@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await getSession();
     if (!session) {
@@ -19,12 +19,25 @@ export async function GET() {
     const isAdmin = user.role === 'ADMIN';
     const canAccessAll = isAdmin || (user as any).can_access_monitoring;
 
+    const { searchParams } = new URL(request.url);
+    const activityType = searchParams.get('type') || undefined;
+    const startDate = searchParams.get('startDate') || undefined;
+    const endDate = searchParams.get('endDate') || undefined;
+
     const where: any = {};
     if (!canAccessAll) {
       where.userId = session.userId;
     }
+    if (activityType) {
+      where.activityType = activityType;
+    }
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) where.createdAt.gte = new Date(startDate);
+      if (endDate) where.createdAt.lte = new Date(endDate + 'T23:59:59.999Z');
+    }
 
-    const data = await (prisma as any).monitoringGMM.findMany({
+    const data = await (prisma as any).monitoringActivity.findMany({
       where,
       orderBy: { createdAt: 'desc' },
     });
@@ -49,45 +62,116 @@ export async function POST(request: Request) {
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     const body = await request.json();
-    console.log('Incoming GMM Request Body:', body);
+    const { 
+      name, 
+      codeReferral, 
+      noAccount, 
+      product, 
+      amount, 
+      target, 
+      total, 
+      activityType, 
+      bookingId, 
+      branchCode
+    } = body;
 
-    const { name, codeReferral, noAccount, product, amount, target, total } = body;
+    const type = activityType || 'GMM';
+    const status = (type === 'GMM') ? 'PENDING' : 'VERIFIED';
+    
+    const inputAmount = parseFloat(String(amount)) || 1;
+    const inputTarget = parseFloat(String(target)) || 1;
+    const inputTotal = parseFloat(String(total)) || 1;
 
-    // Use typed access now that generate is complete
-    const entry = await (prisma as any).monitoringGMM.create({
+    // Check for bulk values in either noAccount or bookingId based on type
+    const targetField = (type === 'KSM' || type === 'KPR') ? 'bookingId' : 'noAccount';
+    
+    let values: string[] = [];
+    const rawVal = (targetField === 'bookingId' ? bookingId : noAccount);
+    
+    if (Array.isArray(rawVal)) {
+      values = rawVal.map(v => String(v).trim()).filter(Boolean);
+    } else if (typeof rawVal === 'string' && (rawVal.includes('\n') || rawVal.includes(','))) {
+      values = rawVal.split(/[\n,]+/).map(v => v.trim()).filter(Boolean);
+    } else if (rawVal) {
+      values = [String(rawVal).trim()];
+    }
+
+    if (values.length > 1) {
+      const dataToCreate = values.map((val: string) => ({
+        activityType: type,
+        name: String(name || 'Unknown'),
+        codeReferral: String(codeReferral || ''),
+        noAccount: targetField === 'noAccount' ? val : String(noAccount || ''),
+        bookingId: targetField === 'bookingId' ? val : String(bookingId || ''),
+        product: String(product || ''),
+        amount: inputAmount,
+        target: inputTarget,
+        total: inputTotal,
+        branchCode: String(branchCode || ''),
+        userId: session.userId,
+        status
+      }));
+
+      const entries = await (prisma as any).monitoringActivity.createMany({
+        data: dataToCreate
+      });
+
+      if (type === 'GMM') {
+        const admins = await (prisma as any).user.findMany({ where: { role: 'ADMIN' }, select: { id: true } });
+        if (admins.length > 0) {
+          await (prisma as any).notification.createMany({
+            data: admins.map((admin: any) => ({
+              userId: admin.id,
+              type: 'GMM_ENTRY',
+              message: `${name} has submitted ${values.length} bulk GMM entries`,
+              isRead: false
+            }))
+          });
+        }
+      }
+
+      return NextResponse.json({ count: entries.count }, { status: 201 });
+    }
+
+    const entry = await (prisma as any).monitoringActivity.create({
       data: { 
+        activityType: type,
         name: String(name || 'Unknown'), 
         codeReferral: String(codeReferral || ''), 
-        noAccount: String(noAccount || ''),
+        noAccount: targetField === 'noAccount' ? (values[0] || "") : String(noAccount || ""),
         product: String(product || ''), 
-        amount: parseFloat(String(amount)) || 0, 
-        target: parseFloat(String(target)) || 0, 
-        total: parseFloat(String(total)) || 0,
+        amount: inputAmount, 
+        target: inputTarget, 
+        total: inputTotal,
+        bookingId: targetField === 'bookingId' ? (values[0] || "") : String(bookingId || ""),
+        branchCode: String(branchCode || ''),
         userId: session.userId,
-        status: 'PENDING'
+        status
       },
     });
 
-    // Create notifications for all admins
-    try {
-      const admins = await (prisma as any).user.findMany({
-        where: { role: 'ADMIN' },
-        select: { id: true }
-      });
-
-      if (admins.length > 0) {
-        await (prisma as any).notification.createMany({
-          data: admins.map((admin: any) => ({
-            userId: admin.id,
-            type: 'GMM_ENTRY',
-            message: `${name} has submitted a new GMM entry for ${product}`,
-            referenceId: entry.id,
-            isRead: false
-          }))
+    // Create notifications for admins only for GMM entries
+    if (type === 'GMM') {
+      try {
+        const admins = await (prisma as any).user.findMany({
+          where: { role: 'ADMIN' },
+          select: { id: true }
         });
+
+        if (admins.length > 0) {
+          await (prisma as any).notification.createMany({
+            data: admins.map((admin: any) => ({
+              userId: admin.id,
+              type: 'GMM_ENTRY',
+              message: `${name} has submitted a new GMM entry for ${product}`,
+              referenceId: entry.id,
+              isRead: false
+            }))
+          });
+        }
+      } catch (notificationErr) {
+        console.error('Failed to create notifications:', notificationErr);
       }
-    } catch (notificationErr) {
-      console.error('Failed to create notifications:', notificationErr);
     }
 
     return NextResponse.json({ entry }, { status: 201 });
@@ -97,7 +181,6 @@ export async function POST(request: Request) {
       stack: err.stack,
       name: err.name,
       code: err.code,
-      keys: Object.keys(prisma).filter(k => !k.startsWith('_'))
     });
     return NextResponse.json({ error: 'Internal server error', details: err.message }, { status: 500 });
   }
@@ -116,13 +199,26 @@ export async function PATCH(request: Request) {
     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     const isAdmin = user.role === 'ADMIN';
-    const canAccessAll = isAdmin || (user as any).can_access_monitoring;
 
-    const { id, ...updateData } = await request.json();
+    const { id, ids, ...updateData } = await request.json();
     
+    // Bulk update support
+    if (ids && Array.isArray(ids) && updateData.status) {
+      if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      
+      const count = await (prisma as any).monitoringActivity.updateMany({
+        where: { id: { in: ids } },
+        data: { status: updateData.status }
+      });
+      return NextResponse.json({ count: count.count });
+    }
+
+    // Single update logic
+    if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
+
     // Check ownership if not admin
     if (!isAdmin) {
-      const existing = await (prisma as any).monitoringGMM.findUnique({ where: { id } });
+      const existing = await (prisma as any).monitoringActivity.findUnique({ where: { id } });
       if (!existing || existing.userId !== session.userId) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
@@ -130,11 +226,20 @@ export async function PATCH(request: Request) {
       delete updateData.status;
     }
 
+    // Only allow verify/reject for GMM type entries
+    if (updateData.status && (updateData.status === 'VERIFIED' || updateData.status === 'REJECTED')) {
+      const existing = await (prisma as any).monitoringActivity.findUnique({ where: { id } });
+      if (existing && existing.activityType !== 'GMM') {
+        // Non-GMM entries cannot be manually verified/rejected
+        delete updateData.status;
+      }
+    }
+
     if (updateData.amount) updateData.amount = Number(updateData.amount);
     if (updateData.target) updateData.target = Number(updateData.target);
     if (updateData.total) updateData.total = Number(updateData.total);
 
-    const entry = await (prisma as any).monitoringGMM.update({
+    const entry = await (prisma as any).monitoringActivity.update({
       where: { id },
       data: updateData,
     });
@@ -162,9 +267,21 @@ export async function DELETE(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
+    
+    // Bulk delete support
+    const body = await request.json().catch(() => ({}));
+    const { ids } = body;
+
+    if (ids && Array.isArray(ids)) {
+      const count = await (prisma as any).monitoringActivity.deleteMany({
+        where: { id: { in: ids } }
+      });
+      return NextResponse.json({ count: count.count });
+    }
+
     if (!id) return NextResponse.json({ error: 'ID is required' }, { status: 400 });
 
-    await (prisma as any).monitoringGMM.delete({ where: { id } });
+    await (prisma as any).monitoringActivity.delete({ where: { id } });
 
     return NextResponse.json({ message: 'Deleted' });
   } catch (err: any) {

@@ -38,7 +38,22 @@ interface DashboardStats {
   wonAmount: number;
   aging: { fresh: number; warning: number; critical: number };
   leaderboard: { id: string; name: string; wonCount: number; pipelineAmount: number }[];
+  activityStats: {
+    GMM: { count: number, amount: number };
+    KSM: { count: number, amount: number };
+    KPR: { count: number, amount: number };
+    CC: { count: number, amount: number };
+    totalCount: number;
+    totalAmount: number;
+  };
 }
+
+const TAB_COLORS = {
+  GMM: 'var(--accent-blue)',
+  KSM: 'var(--accent-green)',
+  KPR: 'var(--accent-orange, #f59e0b)',
+  CC: '#0891b2',
+};
 
 const CHART_COLORS = {
   FRESH: '#10b981',
@@ -88,6 +103,13 @@ export default function DashboardMainPage() {
     { name: 'Done', count: stats.doneTasks, fill: CHART_COLORS.DONE },
   ] : [], [stats]);
 
+  const activityChartData = useMemo(() => stats ? [
+    { name: 'GMM', amount: stats.activityStats.GMM.amount, fill: TAB_COLORS.GMM },
+    { name: 'KSM', amount: stats.activityStats.KSM.amount, fill: TAB_COLORS.KSM },
+    { name: 'KPR', amount: stats.activityStats.KPR.amount, fill: TAB_COLORS.KPR },
+    { name: 'CC', amount: stats.activityStats.CC?.amount || 0, fill: TAB_COLORS.CC },
+  ] : [], [stats]);
+
   const handleStatusChange = async (taskId: string, newStatus: string) => {
     await fetch('/api/tasks', {
       method: 'PATCH',
@@ -107,13 +129,17 @@ export default function DashboardMainPage() {
     }
   };
 
-  // Compact currency formatter for dashboard cards
-  const formatCompactCurrency = (amount: number) => {
-    if (amount >= 1_000_000_000_000) return `Rp ${(amount / 1_000_000_000_000).toFixed(1).replace('.', ',')} T`;
-    if (amount >= 1_000_000_000) return `Rp ${(amount / 1_000_000_000).toFixed(1).replace('.', ',')} M`;
-    if (amount >= 1_000_000) return `Rp ${(amount / 1_000_000).toFixed(1).replace('.', ',')} Jt`;
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount);
+  // Compact number formatter (removes Rp prefix as requested)
+  const formatAmount = (amount: number) => {
+    if (amount >= 1_000_000_000_000) return `${(amount / 1_000_000_000_000).toFixed(1).replace('.', ',')} T`;
+    if (amount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(1).replace('.', ',')} M`;
+    if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1).replace('.', ',')} Jt`;
+    return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(amount);
   };
+
+  const currentMonthName = useMemo(() => {
+    return new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(new Date()).toUpperCase();
+  }, []);
 
   if (loading || !stats) return <div className="loading-spinner" />;
 
@@ -127,29 +153,59 @@ export default function DashboardMainPage() {
       </div>
 
       <div className="stats-grid" id="tour-dash-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-        <div className="stat-card indigo" onClick={() => router.push('/dashboard/tasks')} style={{ cursor: 'pointer', padding: '24px', borderRadius: '12px' }}>
+        <div className="stat-card indigo" onClick={() => router.push('/dashboard/tasks')} style={{ cursor: 'pointer', padding: '20px', borderRadius: '12px' }}>
           <div className="stat-label" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>Total Pipeline (Leads)</div>
-          <div className="stat-value" style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px' }}>{stats.totalLeads}</div>
+          <div className="stat-value" style={{ fontSize: '28px', fontWeight: 700, marginTop: '8px' }}>{stats.totalLeads}</div>
         </div>
-        <div className="stat-card emerald" style={{ padding: '24px', borderRadius: '12px' }}>
-          <div className="stat-label" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>Won Value</div>
-          <div className="stat-value" style={{ fontSize: '24px', fontWeight: 700, marginTop: '8px' }} title={new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(stats.wonAmount)}>{formatCompactCurrency(stats.wonAmount)}</div>
+        <div className="stat-card emerald" style={{ padding: '20px', borderRadius: '12px' }}>
+          <div className="stat-label" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>Won Value (Amount)</div>
+          <div className="stat-value" style={{ fontSize: '24px', fontWeight: 700, marginTop: '8px' }} title={new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(stats.wonAmount)}>{formatAmount(stats.wonAmount)}</div>
         </div>
-        <div className="stat-card amber" style={{ padding: '24px', borderRadius: '12px' }}>
-          <div className="stat-label" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>Potential Pipeline Value</div>
-          <div className="stat-value" style={{ fontSize: '24px', fontWeight: 700, marginTop: '8px' }} title={new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(stats.pipelineAmount)}>{formatCompactCurrency(stats.pipelineAmount)}</div>
+        <div className="stat-card amber" style={{ padding: '20px', borderRadius: '12px' }}>
+          <div className="stat-label" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>Potential Pipeline (Amount)</div>
+          <div className="stat-value" style={{ fontSize: '24px', fontWeight: 700, marginTop: '8px' }} title={new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(stats.pipelineAmount)}>{formatAmount(stats.pipelineAmount)}</div>
         </div>
-        <div className="stat-card rose" onClick={() => router.push('/dashboard/tasks')} style={{ cursor: 'pointer', padding: '24px', borderRadius: '12px' }}>
+        <div className="stat-card rose" onClick={() => router.push('/dashboard/tasks')} style={{ cursor: 'pointer', padding: '20px', borderRadius: '12px' }}>
           <div className="stat-label" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>Open Follow-up Tasks</div>
-          <div className="stat-value" style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px' }}>{stats.openTasks}</div>
+          <div className="stat-value" style={{ fontSize: '28px', fontWeight: 700, marginTop: '8px' }}>{stats.openTasks}</div>
         </div>
-        {isAdmin && (
-          <div className="stat-card cyan" onClick={() => router.push('/dashboard/users')} style={{ cursor: 'pointer', padding: '24px', borderRadius: '12px' }}>
-            <div className="stat-label" style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8 }}>Team Members</div>
-            <div className="stat-value" style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px' }}>{stats.totalUsers}</div>
-          </div>
-        )}
+        <div className="stat-card cyan" onClick={() => router.push('/dashboard/monitoring')} style={{ cursor: 'pointer', padding: '20px', borderRadius: '12px' }}>
+          <div className="stat-label" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-tertiary)', opacity: 0.8 }}>TOTAL ACTIVITIES (AMOUNT)</div>
+          <div className="stat-value" style={{ fontSize: '24px', fontWeight: 700, marginTop: '8px', color: 'var(--accent-blue)' }}>{formatAmount(stats.activityStats.totalAmount)}</div>
+        </div>
       </div>
+
+      <div style={{ marginTop: '24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
+        <div className="card" onClick={() => router.push('/dashboard/monitoring?tab=GMM')} style={{ cursor: 'pointer', padding: '16px', borderLeft: `4px solid ${TAB_COLORS.GMM}`, background: 'var(--bg-card)' }}>
+           <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>GMM SUMMARY ({currentMonthName})</div>
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 700 }}>{stats.activityStats.GMM.count} <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text-tertiary)' }}>Entries</span></div>
+              <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Amount: {formatAmount(stats.activityStats.GMM.amount)}</div>
+           </div>
+        </div>
+        <div className="card" onClick={() => router.push('/dashboard/monitoring?tab=KSM')} style={{ cursor: 'pointer', padding: '16px', borderLeft: `4px solid ${TAB_COLORS.KSM}`, background: 'var(--bg-card)' }}>
+           <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>KSM SUMMARY ({currentMonthName})</div>
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 700 }}>{stats.activityStats.KSM.count} <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text-tertiary)' }}>Entries</span></div>
+              <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Amount: {formatAmount(stats.activityStats.KSM.amount)}</div>
+           </div>
+        </div>
+        <div className="card" onClick={() => router.push('/dashboard/monitoring?tab=KPR')} style={{ cursor: 'pointer', padding: '16px', borderLeft: `4px solid ${TAB_COLORS.KPR}`, background: 'var(--bg-card)' }}>
+           <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>KPR SUMMARY ({currentMonthName})</div>
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 700 }}>{stats.activityStats.KPR.count} <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text-tertiary)' }}>Entries</span></div>
+              <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Amount: {formatAmount(stats.activityStats.KPR.amount)}</div>
+           </div>
+        </div>
+        <div className="card" onClick={() => router.push('/dashboard/monitoring?tab=CC')} style={{ cursor: 'pointer', padding: '16px', borderLeft: `4px solid ${TAB_COLORS.CC}`, background: 'var(--bg-card)' }}>
+           <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>CC SUMMARY ({currentMonthName})</div>
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
+              <div style={{ fontSize: '24px', fontWeight: 700 }}>{stats.activityStats.CC?.count || 0} <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text-tertiary)' }}>Entries</span></div>
+              <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Amount: {formatAmount(stats.activityStats.CC?.amount || 0)}</div>
+           </div>
+        </div>
+      </div>
+
 
       <div className="charts-grid" id="tour-dash-chart" style={{ display: 'grid', gridTemplateColumns: isAdmin ? '1fr 1fr 1fr' : '1fr 1fr', gap: '24px', marginTop: '24px' }}>
         <div className="chart-card" style={{ background: 'var(--bg-card)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
@@ -175,14 +231,17 @@ export default function DashboardMainPage() {
         </div>
 
         <div className="chart-card" style={{ background: 'var(--bg-card)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
-          <div className="chart-title" style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Task Completion Tracker</div>
+          <div className="chart-title" style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Activity Breakdown (Total Amount)</div>
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={barData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+            <BarChart data={activityChartData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
               <XAxis dataKey="name" tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ background: 'var(--bg-popover)', border: '1px solid var(--border-subtle)', borderRadius: '8px', boxShadow: '0 4px 8px -2px rgba(0,0,0,0.1)', color: 'var(--text-primary)' }} cursor={{ fill: 'var(--bg-main)' }} />
-              <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={60}>
-                {barData.map((entry, index) => (
+              <YAxis tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(value) => formatAmount(value)} />
+              <Tooltip 
+                formatter={(value: any) => [formatAmount(value), 'Total Amount']}
+                contentStyle={{ background: 'var(--bg-popover)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-primary)' }} 
+              />
+              <Bar dataKey="amount" radius={[6, 6, 0, 0]} maxBarSize={60}>
+                {activityChartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.fill} />
                 ))}
               </Bar>
@@ -190,7 +249,8 @@ export default function DashboardMainPage() {
           </ResponsiveContainer>
         </div>
 
-        {isAdmin && (
+
+        {isAdmin ? (
            <div className="chart-card" style={{ background: 'var(--bg-card)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
               <div className="chart-title" style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Top Performers</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -211,6 +271,22 @@ export default function DashboardMainPage() {
                  )}
               </div>
            </div>
+        ) : (
+          <div className="chart-card" style={{ background: 'var(--bg-card)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
+            <div className="chart-title" style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Task Status</div>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={barData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
+                <XAxis dataKey="name" tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: 'var(--bg-popover)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-primary)' }} />
+                <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={60}>
+                  {barData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </div>
 
@@ -219,7 +295,7 @@ export default function DashboardMainPage() {
           <div className="table-header">
              <div>
                 <h2 className="table-title">My Recent Tasks</h2>
-                <p className="page-subtitle" style={{ margin: 0 }}>Menampilkan {Math.min(tasks.length, 5)} dari {tasks.length} tugas yang ditugaskan</p>
+                <p className="page-subtitle">Menampilkan {Math.min(tasks.length, 5)} dari {tasks.length} tugas yang ditugaskan</p>
              </div>
              <button className="btn btn-secondary btn-sm" onClick={() => router.push('/dashboard/tasks')}>View All CRM Tasks</button>
           </div>

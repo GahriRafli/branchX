@@ -53,7 +53,7 @@ export async function PATCH(request: Request) {
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
-    const { id, status, priority, owner_user_id, support_needed } = body;
+    const { id, status, priority, owner_user_id, support_needed, keterangan } = body;
 
     if (!id) return NextResponse.json({ error: 'Lead ID required' }, { status: 400 });
 
@@ -65,14 +65,8 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Auto-delete lead + tasks if status is CANCELLED or KICK
-    if (status === 'CANCELLED' || status === 'KICK') {
-      // Delete all tasks associated with this lead first
-      await prisma.task.deleteMany({ where: { leadId: id } });
-      // Delete the lead itself
-      await prisma.lead.delete({ where: { id } });
-      return NextResponse.json({ deleted: true, message: `Lead telah dihapus karena status ${status}` });
-    }
+    // [REMOVED] Auto-delete lead + tasks if status is CANCELLED or KICK
+    // as per user request to keep "Keterangan" reasons.
 
     const updateData: any = { last_activity_at: new Date() };
     if (status) {
@@ -87,6 +81,7 @@ export async function PATCH(request: Request) {
     }
     if (priority) updateData.priority = priority;
     if (support_needed !== undefined) updateData.support_needed = support_needed;
+    if (keterangan !== undefined) updateData.keterangan = keterangan;
     
     // Only Admin can reassign
     if (session.role === 'ADMIN' && owner_user_id !== undefined) {

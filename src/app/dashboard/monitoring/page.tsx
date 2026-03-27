@@ -1,66 +1,122 @@
 'use client';
-import Pagination from '@/components/Pagination';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../layout';
-import { useRouter } from 'next/navigation';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line 
-} from 'recharts';
+import { useRouter, useSearchParams } from 'next/navigation';
 import * as XLSX from 'xlsx';
+
+const ACTIVITY_TYPES = ['GMM', 'KSM', 'KPR', 'CC'] as const;
+type ActivityType = typeof ACTIVITY_TYPES[number];
 
 interface MonitoringData {
   id: string;
+  activityType: string;
   name: string;
   codeReferral: string;
   noAccount: string;
+  bookingId: string;
+  branchCode: string;
   product: string;
   amount: number;
   target: number;
   total: number;
   status: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  extraData?: any;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export default function MonitoringPage() {
   const { user, loading: authLoading, isAdmin, showToast } = useAuth();
+  const [activities, setActivities] = useState<any[]>([]);
   const router = useRouter();
+
+  const [activeTab, setActiveTab] = useState<ActivityType>('GMM');
   const [data, setData] = useState<MonitoringData[]>([]);
-  const [loading, setLoading] = useState(true); // Kept original loading state
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sortConfig, setSortConfig] = useState<{ key: keyof MonitoringData, direction: 'asc' | 'desc' } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search]);
+  const [dateRange, setDateRange] = useState({
+    start: '',
+    end: ''
+  });
+
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   // CRUD State
   const [showModal, setShowModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    action: () => void;
+    type: 'success' | 'danger' | 'warning';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    action: () => { },
+    type: 'success'
+  });
   const [showDeleteModal, setShowDeleteModal] = useState<string | null>(null);
   const [bulkActionConfirm, setBulkActionConfirm] = useState<{ action: 'VERIFY' | 'REJECT' | 'DELETE', count: number } | null>(null);
   const [editingEntry, setEditingEntry] = useState<MonitoringData | null>(null);
-  const [form, setForm] = useState({ name: '', codeReferral: '', noAccount: '', product: '', amount: '0', target: '0', total: '0' });
+
+  // Modal Form State
+  const [formType, setFormType] = useState<ActivityType>('GMM');
+  const [form, setForm] = useState({
+    name: '',
+    codeReferral: '',
+    noAccounts: [''],
+    product: '',
+    amount: '0',
+    target: '0',
+    total: '0',
+    bookingIds: [''],
+    branchCode: ''
+  });
   const [error, setError] = useState('');
   const [errorDetails, setErrorDetails] = useState('');
 
-  // Auto-calculate total from amount and target
+  // Update formType when activeTab changes (for initialization)
   useEffect(() => {
-    setForm(prev => ({ ...prev, total: prev.amount }));
-  }, [form.amount]);
+    if (!showModal) setFormType(activeTab);
+  }, [activeTab, showModal]);
 
-  const fetchData = async () => {
+
+  const fetchData = useCallback(async () => {
     try {
+      setLoading(true);
       const res = await fetch('/api/monitoring');
       const d = await res.json();
-      if (d.data) setData(d.data);
-      setLoading(false);
+      if (d.activities) {
+        setData(d.activities);
+      } else if (d.data) {
+        setData(d.data);
+      }
     } catch (err) {
       console.error('Failed to fetch monitoring data:', err);
+    } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const tab = searchParams.get('tab') as ActivityType;
+    if (tab && ACTIVITY_TYPES.includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeTab, search, dateRange]);
 
   useEffect(() => {
     if (!authLoading) {
@@ -70,199 +126,254 @@ export default function MonitoringPage() {
       }
       fetchData();
     }
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, fetchData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setErrorDetails('');
     const method = editingEntry ? 'PATCH' : 'POST';
-    const body = editingEntry ? { ...form, id: editingEntry.id } : form;
 
-    const res = await fetch('/api/monitoring', {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    // Status Logic: Non-GMM entries are VERIFIED, GMM is PENDING
+    const status = (formType === 'GMM') ? 'PENDING' : 'VERIFIED';
 
-    if (res.ok) {
-      setShowModal(false);
-      fetchData();
-      showToast('Success', editingEntry ? 'Entry updated successfully' : 'New entry saved successfully');
+    const body: any = {
+      ...form,
+      id: editingEntry?.id,
+      activityType: formType,
+      amount: parseFloat(form.amount) || 0,
+      target: parseFloat(form.target) || 0,
+      total: parseFloat(form.total) || 0,
+      status: editingEntry ? editingEntry.status : status
+    };
+
+    if (editingEntry) {
+      // For updates, we only send the first value as a string
+      if (formType === 'GMM' || formType === 'CC') {
+        body.noAccount = form.noAccounts[0] || '';
+      } else {
+        body.bookingId = form.bookingIds[0] || '';
+      }
     } else {
-      const d = await res.json();
-      setError(d.error || 'Failed to save entry');
-      if (d.details) setErrorDetails(d.details);
-      showToast('Error', d.error || 'Failed to save entry', 'error');
-      console.error('Save error:', d);
+      // For creation, we send the array (or filter empty ones)
+      if (formType === 'GMM' || formType === 'CC') {
+        body.noAccount = form.noAccounts.filter(Boolean);
+      } else {
+        body.bookingId = form.bookingIds.filter(Boolean);
+      }
     }
+
+    // Remove the array versions from the body to avoid confusion
+    delete body.noAccounts;
+    delete body.bookingIds;
+
+    try {
+      const res = await fetch('/api/monitoring', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        setShowModal(false);
+        fetchData();
+        showToast('Success', `Activity record ${editingEntry ? 'updated' : 'added'} successfully`, 'success');
+      } else {
+        const d = await res.json();
+        setError(d.error || 'Failed to save entry');
+        if (d.details) setErrorDetails(d.details);
+        showToast('Error', d.error || 'Failed to save entry', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Error', 'An unexpected error occurred', 'error');
+    }
+  };
+
+  const handleBulkVerify = async () => {
+    if (selectedIds.size === 0) return;
+    setShowConfirmModal({
+      visible: true,
+      title: 'Verify Selected Activities',
+      message: `Are you sure you want to verify ${selectedIds.size} selected records?`,
+      type: 'success',
+      action: async () => {
+        const res = await fetch('/api/monitoring', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: Array.from(selectedIds), status: 'VERIFIED' }),
+        });
+        if (res.ok) {
+          setSelectedIds(new Set());
+          fetchData();
+          showToast('Verified', `${selectedIds.size} activities have been verified`, 'success');
+        } else {
+          showToast('Error', 'Failed to verify activities', 'error');
+        }
+        setShowConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
+  };
+
+  const handleBulkReject = async () => {
+    if (selectedIds.size === 0) return;
+    setShowConfirmModal({
+      visible: true,
+      title: 'Reject Selected Activities',
+      message: `Are you sure you want to reject ${selectedIds.size} selected records?`,
+      type: 'danger',
+      action: async () => {
+        const res = await fetch('/api/monitoring', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: Array.from(selectedIds), status: 'REJECTED' }),
+        });
+        if (res.ok) {
+          setSelectedIds(new Set());
+          fetchData();
+          showToast('Rejected', `${selectedIds.size} activities have been rejected`, 'warning');
+        } else {
+          showToast('Error', 'Failed to reject activities', 'error');
+        }
+        setShowConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setShowConfirmModal({
+      visible: true,
+      title: 'Delete Selected Activities',
+      message: `Are you sure you want to permanently delete ${selectedIds.size} selected records? This action cannot be undone.`,
+      type: 'danger',
+      action: async () => {
+        const res = await fetch('/api/monitoring', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: Array.from(selectedIds) }),
+        });
+        if (res.ok) {
+          setSelectedIds(new Set());
+          fetchData();
+          showToast('Deleted', `${selectedIds.size} records have been deleted`, 'warning');
+        } else {
+          showToast('Error', 'Failed to delete activities', 'error');
+        }
+        setShowConfirmModal(prev => ({ ...prev, visible: false }));
+      }
+    });
   };
 
   const handleVerify = async (id: string) => {
-    try {
-      const res = await fetch('/api/monitoring', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status: 'VERIFIED' }),
-      });
-      if (res.ok) { fetchData(); showToast('Verified', 'Entry verified successfully'); }
-      else throw new Error();
-    } catch { showToast('Error', 'Failed to verify entry', 'error'); }
+    const res = await fetch('/api/monitoring', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status: 'VERIFIED' }),
+    });
+    if (res.ok) {
+      fetchData();
+      showToast('Verified', 'Activity has been verified', 'success');
+    } else {
+      showToast('Error', 'Failed to verify activity', 'error');
+    }
   };
 
   const handleReject = async (id: string) => {
-    try {
-      const res = await fetch('/api/monitoring', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status: 'REJECTED' }),
-      });
-      if (res.ok) { fetchData(); showToast('Rejected', 'Entry rejected', 'warning'); }
-      else throw new Error();
-    } catch { showToast('Error', 'Failed to reject entry', 'error'); }
+    const res = await fetch('/api/monitoring', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status: 'REJECTED' }),
+    });
+    if (res.ok) {
+      fetchData();
+      showToast('Rejected', 'Activity has been rejected', 'warning');
+    } else {
+      showToast('Error', 'Failed to reject activity', 'error');
+    }
   };
 
-  const confirmDelete = async () => {
-    if (!showDeleteModal) return;
-    try {
-      const res = await fetch(`/api/monitoring?id=${showDeleteModal}`, { method: 'DELETE' });
-      if (res.ok) {
-        setShowDeleteModal(null);
-        fetchData();
-        showToast('Deleted', 'Entry deleted successfully', 'warning');
-      } else throw new Error();
-    } catch { showToast('Error', 'Failed to delete entry', 'error'); }
-  };
-
-  // Note: paginatedData will be defined below filteredData, but we can't reference it here yet.
-  // We'll update handleSelectAll slightly later manually if needed, or we just reconstruct paginated array logic here.
-
-  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Quick calculation for current page data
-    const sorted = [...data].filter(item => 
-      item.name.toLowerCase().includes(search.toLowerCase()) ||
-      item.codeReferral.toLowerCase().includes(search.toLowerCase()) ||
-      item.noAccount.includes(search)
-    ).sort((a, b) => {
-      // (simplified sort for select all isn't perfect, we can instead move filteredData/paginatedData up or move this function down)
-      return 0; // We'll redefine handleSelectAll below filteredData to have access to paginatedData
+  const handleDelete = async (id: string) => {
+    setShowConfirmModal({
+      visible: true,
+      title: 'Delete Activity',
+      message: 'Are you sure you want to delete this activity record? This action cannot be undone.',
+      type: 'danger',
+      action: async () => {
+        const res = await fetch(`/api/monitoring?id=${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          fetchData();
+          showToast('Deleted', 'Activity record deleted successfully', 'warning');
+        } else {
+          showToast('Error', 'Failed to delete activity record', 'error');
+        }
+        setShowConfirmModal(prev => ({ ...prev, visible: false }));
+      }
     });
   };
 
-  const handleSelect = (id: string) => {
-    const newSet = new Set(selectedIds);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
-    }
-    setSelectedIds(newSet);
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) newSelected.delete(id);
+    else newSelected.add(id);
+    setSelectedIds(newSelected);
   };
 
-  const handleBulkVerify = () => {
-    setBulkActionConfirm({ action: 'VERIFY', count: selectedIds.size });
-  };
-
-  const handleBulkReject = () => {
-    setBulkActionConfirm({ action: 'REJECT', count: selectedIds.size });
-  };
-
-  const handleBulkDelete = () => {
-    setBulkActionConfirm({ action: 'DELETE', count: selectedIds.size });
-  };
-
-  const executeBulkAction = async () => {
-    if (!bulkActionConfirm) return;
-    setLoading(true);
-    try {
-      if (bulkActionConfirm.action === 'DELETE') {
-        await Promise.all(Array.from(selectedIds).map(id =>
-          fetch(`/api/monitoring?id=${id}`, { method: 'DELETE' })
-        ));
-      } else {
-        await Promise.all(Array.from(selectedIds).map(id =>
-          fetch('/api/monitoring', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id, status: bulkActionConfirm.action === 'VERIFY' ? 'VERIFIED' : 'REJECTED' }),
-          })
-        ));
-      }
-      showToast(`Bulk ${bulkActionConfirm.action}`, `${selectedIds.size} entries processed successfully.`, bulkActionConfirm.action === 'DELETE' || bulkActionConfirm.action === 'REJECT' ? 'warning' : 'success');
+  const toggleSelectAll = (currentPageIds: string[]) => {
+    if (selectedIds.size === currentPageIds.length && currentPageIds.length > 0) {
       setSelectedIds(new Set());
-      setBulkActionConfirm(null);
-      fetchData();
-    } catch {
-      showToast('Error', `Failed to execute bulk ${bulkActionConfirm.action.toLowerCase()}`, 'error');
-      setLoading(false);
+    } else {
+      setSelectedIds(new Set(currentPageIds));
     }
   };
 
+  // Filter logic including date range and role
   const filteredData = useMemo(() => {
-    let result = [...data].filter(item => 
-      item.name.toLowerCase().includes(search.toLowerCase()) ||
-      item.codeReferral.toLowerCase().includes(search.toLowerCase()) ||
-      item.noAccount.toLowerCase().includes(search.toLowerCase()) ||
-      item.product.toLowerCase().includes(search.toLowerCase())
-    );
+    let result = data.filter(item => item.activityType === activeTab);
 
+    // Role-based filtering: Regular users only see their own entries
+    if (!isAdmin) {
+      result = result.filter(item => item.name === user?.name || item.codeReferral === user?.nip);
+    }
+
+    // Search filter
+    if (search) {
+      const s = search.toLowerCase();
+      result = result.filter(item =>
+        item.name.toLowerCase().includes(s) ||
+        item.codeReferral.toLowerCase().includes(s) ||
+        (item.noAccount && item.noAccount.toLowerCase().includes(s)) ||
+        (item.bookingId && item.bookingId.toLowerCase().includes(s)) ||
+        item.product.toLowerCase().includes(s) ||
+        (item.branchCode && item.branchCode.toLowerCase().includes(s))
+      );
+    }
+
+    // Date Range Filter
+    if (dateRange.start) {
+      const startDate = new Date(dateRange.start);
+      startDate.setHours(0, 0, 0, 0);
+      result = result.filter(item => new Date(item.createdAt) >= startDate);
+    }
+    if (dateRange.end) {
+      const endDate = new Date(dateRange.end);
+      endDate.setHours(23, 59, 59, 999);
+      result = result.filter(item => new Date(item.createdAt) <= endDate);
+    }
+
+    // Sort logic
     if (sortConfig) {
-      result.sort((a, b) => {
+      result.sort((a: any, b: any) => {
         if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
         if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
       });
     }
     return result;
-  }, [data, search, sortConfig]);
+  }, [data, activeTab, search, dateRange, sortConfig, isAdmin, user]);
 
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  const paginatedData = useMemo(() => {
-    return filteredData.slice(
-      (currentPage - 1) * itemsPerPage,
-      currentPage * itemsPerPage
-    );
-  }, [filteredData, currentPage]);
-
-  const handleSelectAllPaginated = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
-      setSelectedIds(new Set(paginatedData.map(item => item.id)));
-    } else {
-      setSelectedIds(new Set());
-    }
-  };
-
-  const stats = useMemo(() => {
-    const totalAmount = data.reduce((sum, item) => item.status !== 'REJECTED' ? sum + item.amount : sum, 0);
-    const totalTarget = data.reduce((sum, item) => sum + item.target, 0);
-    const achievement = totalTarget > 0 ? (totalAmount / totalTarget) * 100 : 0;
-    // Count unique products
-    const uniqueProducts = new Set(data.map(item => item.product)).size;
-
-    return {
-      totalAmount,
-      totalTarget,
-      achievement: Math.round(achievement) + '%',
-      totalProducts: uniqueProducts
-    };
-  }, [data]);
-
-  const aggregatedChartData = useMemo(() => {
-    const grouped = data.reduce((acc: any, item: any) => {
-      if (!acc[item.name]) {
-        acc[item.name] = { ...item, amount: 0, target: 0, total: 0 };
-      }
-      
-      if (item.status !== 'REJECTED') {
-        acc[item.name].amount += item.amount;
-        acc[item.name].total += item.total;
-      }
-      
-      acc[item.name].target += item.target;
-      return acc;
-    }, {});
-    return Object.values(grouped);
-  }, [data]);
+  const totalPages = Math.ceil(filteredData.length / pageSize);
+  const paginatedData = filteredData.slice((page - 1) * pageSize, page * pageSize);
 
   const handleSort = (key: keyof MonitoringData) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -273,23 +384,31 @@ export default function MonitoringPage() {
   };
 
   const exportToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(filteredData);
+    const ws = XLSX.utils.json_to_sheet(filteredData.map(item => ({
+      'Nama Employee': item.name,
+      'Code Referral': item.codeReferral,
+      'Code Cabang': item.branchCode || '-',
+      'Date': new Date(item.createdAt).toLocaleDateString(),
+      'No Account/Booking ID': item.noAccount || item.bookingId,
+      'Produk': item.product,
+      'Status': item.status
+    })));
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Monitoring GMM");
-    XLSX.writeFile(wb, `GMM_Monitoring_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, `Data ${activeTab}`);
+    XLSX.writeFile(wb, `${activeTab}_Activity_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const exportToCSV = () => {
-    const headers = ['Nama Employee', 'Code Refferal', 'No Account', 'Product', 'Amount', 'Target', 'Total', 'Status'];
+    const headers = ['Nama Employee', 'Code Referral', 'Code Cabang', 'Date', 'ID', 'Produk', 'Status'];
     const rows = filteredData.map(item => [
-      item.name, item.codeReferral, item.noAccount, item.product, item.amount, item.target, item.total, item.status
+      item.name, item.codeReferral, item.branchCode || '-', new Date(item.createdAt).toLocaleDateString(), item.noAccount || item.bookingId, item.product, item.status
     ]);
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     link.setAttribute("href", url);
-    link.setAttribute("download", `GMM_Monitoring_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `${activeTab}_Activity_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -298,316 +417,598 @@ export default function MonitoringPage() {
 
   if (loading || authLoading) return <div className="loading-spinner" />;
 
+  const isGMM = activeTab === 'GMM';
+  const isCC = activeTab === 'CC';
+
   return (
     <div className="monitoring-page">
-      <div className="page-header">
+      <div className="page-header" style={{ marginBottom: '16px' }}>
         <div>
-          <h1 className="page-title">{isAdmin ? 'Admin GMM Monitoring' : 'Entry GMM Saya'}</h1>
-          <p className="page-subtitle">{isAdmin ? 'Kelola dan verifikasi pencapaian GMM tim' : 'Input pencapaian GMM harian kamu'}</p>
+          <h1 className="page-title" style={{ fontSize: '28px', fontWeight: 800, background: 'linear-gradient(135deg, var(--text-primary), #64748b)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Activity Management</h1>
+          <p className="page-subtitle" style={{ fontSize: '14px', marginTop: '4px' }}>Kelola dan pantau seluruh aktivitas tim secara real-time</p>
         </div>
       </div>
 
-      {isAdmin && (
-        <>
-          <div className="dashboard-grid" id="tour-gmm-stats" style={{ marginBottom: '24px' }}>
-            <div className="stat-card indigo">
-              <div className="stat-label">Total Amount</div>
-              <div className="stat-value">{stats.totalAmount.toLocaleString()}</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Total Target</div>
-              <div className="stat-value">{stats.totalTarget.toLocaleString()}</div>
-            </div>
-            <div className="stat-card emerald">
-              <div className="stat-label">Achievement</div>
-              <div className="stat-value">{stats.achievement}</div>
-            </div>
-            <div className="stat-card cyan">
-              <div className="stat-label">Products (Unique)</div>
-              <div className="stat-value">{stats.totalProducts}</div>
-            </div>
-          </div>
-
-          <div className="card" id="tour-gmm-chart" style={{ marginBottom: '24px', padding: '20px', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }}>
-            <h3 style={{ marginBottom: '20px', fontSize: '15px' }}>Achievement Overview</h3>
-            <div style={{ width: '100%', height: 300 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={aggregatedChartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-default)" />
-                  <XAxis dataKey="name" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis fontSize={11} tickLine={false} axisLine={false} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-default)', borderRadius: '8px' }}
-                    itemStyle={{ fontSize: 11 }}
-                  />
-                  <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px' }}/>
-                  <Bar dataKey="amount" fill="var(--accent-blue)" name="Amount" radius={[4, 4, 0, 0]} barSize={20} />
-                  <Bar dataKey="target" fill="var(--text-tertiary)" name="Target" radius={[4, 4, 0, 0]} barSize={20} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </>
-      )}
-
-      <div className="card" style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', background: 'var(--bg-card)', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <h3 style={{ margin: 0, fontSize: '15px' }}>{isAdmin ? 'Seluruh Data GMM' : 'Riwayat Input Saya'}</h3>
-            {isAdmin && selectedIds.size > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 12px', background: 'var(--bg-primary)', borderRadius: '20px', border: '1px solid var(--border-default)' }}>
-                <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>{selectedIds.size} dipilih:</span>
-                <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: '11px', background: 'var(--accent-green)', color: 'white', border: 'none' }} onClick={handleBulkVerify}>Verify</button>
-                <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: '11px', background: 'var(--accent-red)', color: 'white', border: 'none' }} onClick={handleBulkReject}>Reject</button>
-                <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: '11px', background: 'transparent', color: 'var(--accent-red)', border: '1px solid var(--accent-red)' }} onClick={handleBulkDelete}>Delete</button>
-              </div>
-            )}
-          </div>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '24px',
+        padding: '16px 20px',
+        background: 'var(--bg-card)',
+        borderRadius: '16px',
+        border: '1px solid var(--border-subtle)',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+      }}>
+        <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button 
-              id="tour-gmm-add"
-              className="btn btn-primary btn-sm" 
+            <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}>📅</div>
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Filter Periode</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                <input type="date" value={dateRange.start} onChange={e => setDateRange({ ...dateRange, start: e.target.value })} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, padding: 0, width: '120px', cursor: 'pointer' }} />
+                <span style={{ fontSize: '12px', color: '#94a3b8' }}>-</span>
+                <input type="date" value={dateRange.end} onChange={e => setDateRange({ ...dateRange, end: e.target.value })} style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, padding: 0, width: '120px', cursor: 'pointer' }} />
+              </div>
+            </div>
+          </div>
+          <div style={{ height: '32px', width: '1px', background: 'var(--border-subtle)' }} />
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button className="btn" style={{ background: 'rgba(124, 58, 237, 0.1)', color: '#7c3aed', border: 'none', borderRadius: '10px', padding: '8px 16px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }} onClick={exportToCSV}>
+              <span style={{ fontSize: '16px' }}>📄</span> Export CSV
+            </button>
+            <button className="btn" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', border: 'none', borderRadius: '10px', padding: '8px 16px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }} onClick={exportToExcel}>
+              <span style={{ fontSize: '16px' }}>📗</span> Export Excel
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="tabs-container" style={{ marginBottom: '24px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '12px', flex: 1 }}>
+          {ACTIVITY_TYPES.map(type => (
+            <button
+              key={type}
+              onClick={() => {
+                setActiveTab(type);
+                setSelectedIds(new Set());
+              }}
+              className={`tab-btn ${activeTab === type ? 'active' : ''}`}
+              style={{
+                padding: '12px 24px',
+                borderRadius: '12px',
+                border: activeTab === type ? 'none' : '1px solid #e2e8f0',
+                background: activeTab === type ? 'white' : '#f8fafc',
+                color: activeTab === type ? '#1e293b' : '#64748b',
+                fontSize: '14px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: activeTab === type ? '0 4px 12px rgba(0,0,0,0.05)' : 'none'
+              }}
+            >
+              <span style={{ fontSize: '18px' }}>
+                {type === 'GMM' ? '📊' : type === 'KSM' ? '🚗' : type === 'KPR' ? '🏠' : '💳'}
+              </span>
+              {type}
+              <span style={{ fontSize: '11px', color: activeTab === type ? '#94a3b8' : '#cbd5e1', fontWeight: 500 }}>
+                {data.filter(d => d.activityType === type).length}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="card" style={{ borderRadius: '16px', border: '1px solid #e2e8f0', background: 'white', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#1e293b' }}>Data {activeTab}</h3>
+            <button
               onClick={() => {
                 setEditingEntry(null);
-                setForm({ name: user?.name || '', codeReferral: '', noAccount: '', product: '', amount: '0', target: '0', total: '0' });
+                setFormType(activeTab);
+                setForm({
+                  name: user?.name || '',
+                  codeReferral: user?.nip || '',
+                  noAccounts: [''],
+                  product: '',
+                  amount: '1',
+                  target: '1',
+                  total: '1',
+                  bookingIds: [''],
+                  branchCode: ''
+                });
                 setShowModal(true);
               }}
-              title="Input GMM Baru"
-              style={{ width: '36px', height: '36px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px' }}
+              style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '18px' }}
             >
               ➕
             </button>
-            {isAdmin && (
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button 
-                  className="btn btn-secondary btn-sm" 
-                  onClick={exportToCSV} 
-                  title="Export CSV"
-                  style={{ width: '36px', height: '36px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}
-                >
-                  📄
-                </button>
-                <button 
-                  className="btn btn-secondary btn-sm" 
-                  onClick={exportToExcel} 
-                  title="Export Excel"
-                  style={{ width: '36px', height: '36px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '16px' }}
-                >
-                  📗
-                </button>
-              </div>
-            )}
-            <input 
-              className="search-input" 
-              placeholder="Cari employee, referral, atau account..." 
+          </div>
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', opacity: 0.3 }}>🔍</span>
+            <input
+              className="search-input"
+              placeholder={`Cari di ${activeTab}...`}
               value={search}
               onChange={e => setSearch(e.target.value)}
+              style={{ paddingLeft: '36px', height: '36px', width: '220px', borderRadius: '10px', fontSize: '13px' }}
             />
           </div>
         </div>
-        <div className="table-container" id="tour-gmm-table" style={{ margin: 0, border: 'none', borderRadius: 0 }}>
-          <div className="data-table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  {isAdmin && (
-                    <th id="tour-gmm-bulk" style={{ width: '40px', textAlign: 'center' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={paginatedData.length > 0 && selectedIds.size === paginatedData.length}
-                        onChange={handleSelectAllPaginated}
-                      />
-                    </th>
-                  )}
-                  <th onClick={() => handleSort('name')}>Nama Employee {sortConfig?.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                  <th onClick={() => handleSort('codeReferral')}>Code Refferal {sortConfig?.key === 'codeReferral' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                  <th onClick={() => handleSort('noAccount')}>No Account {sortConfig?.key === 'noAccount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                  <th onClick={() => handleSort('product')}>Product {sortConfig?.key === 'product' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                  <th onClick={() => handleSort('amount')}>Amount {sortConfig?.key === 'amount' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                  <th onClick={() => handleSort('target')}>Target {sortConfig?.key === 'target' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                  <th onClick={() => handleSort('status')}>Status {sortConfig?.key === 'status' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedData.map(item => (
-                  <tr key={item.id} style={{ background: selectedIds.has(item.id) ? 'var(--bg-primary)' : 'transparent' }}>
-                    {isAdmin && (
-                      <td style={{ textAlign: 'center' }}>
-                        <input 
-                          type="checkbox" 
-                          checked={selectedIds.has(item.id)}
-                          onChange={() => handleSelect(item.id)}
-                        />
-                      </td>
-                    )}
-                    <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.name}</td>
-                    <td><code>{item.codeReferral}</code></td>
-                    <td>{item.noAccount}</td>
-                    <td><span className="status-badge status-todo" style={{ background: 'var(--bg-primary)' }}>{item.product}</span></td>
-                    <td style={{ fontWeight: 500 }}>{item.amount.toLocaleString()}</td>
-                    <td>{item.target.toLocaleString()}</td>
-                    <td>
-                      <span 
-                        className={`status-badge ${item.status === 'VERIFIED' ? 'status-done' : item.status === 'REJECTED' ? 'status-rejected' : 'status-in-progress'}`}
-                      >
-                        {item.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        {isAdmin && item.status === 'PENDING' && (
-                          <>
-                            <button className="btn btn-primary btn-sm" onClick={() => handleVerify(item.id)}>Verify</button>
-                            <button className="btn btn-danger btn-sm" onClick={() => handleReject(item.id)} style={{ padding: '0 12px' }}>Reject</button>
-                          </>
-                        )}
-                        {(isAdmin || item.status === 'PENDING') && (
-                          <button className="btn btn-secondary btn-sm" onClick={() => {
-                            setEditingEntry(item);
-                            setForm({ 
-                              name: item.name, 
-                              codeReferral: item.codeReferral, 
-                              noAccount: item.noAccount,
-                              product: item.product, 
-                              amount: item.amount.toString(), 
-                              target: item.target.toString(), 
-                              total: item.total.toString() 
-                            });
-                            setShowModal(true);
-                          }}>Edit</button>
-                        )}
-                        {isAdmin && (
-                          <button className="btn btn-danger btn-sm" onClick={() => setShowDeleteModal(item.id)}>Delete</button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {filteredData.length === 0 && (
-                  <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-tertiary)' }}>
-                      <div style={{ fontSize: '24px', marginBottom: '8px' }}>🔍</div>
-                      Belum ada data
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
 
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            totalItems={filteredData.length}
-            itemsPerPage={itemsPerPage}
-            itemName="entries"
-          />
+        <div className="table-container" style={{ margin: 0, border: 'none' }}>
+          <table className="data-table">
+            <thead>
+              <tr style={{ background: '#f8fafc' }}>
+                <th style={{ width: '40px' }}><input type="checkbox" onChange={() => toggleSelectAll(filteredData.map(d => d.id))} /></th>
+                {[
+                  { label: 'NAMA EMPLOYEE', key: 'name' },
+                  { label: 'CODE REFERRAL', key: 'codeReferral' },
+                  { label: 'CODE CABANG', key: 'branchCode' },
+                  { label: 'STATUS', key: 'status' },
+                  ...(activeTab === 'GMM' ? [
+                    { label: 'NO ACCOUNT', key: 'noAccount' },
+                    { label: 'PRODUCT', key: 'product' }
+                  ] : activeTab === 'KSM' || activeTab === 'KPR' || activeTab === 'CC' ? [
+                    { label: 'BOOKING ID', key: 'bookingId' }
+                  ] : [])
+                ].map(col => (
+                  <th
+                    key={col.key}
+                    style={{ fontSize: '11px', color: '#64748b', cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => handleSort(col.key as any)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      {col.label}
+                      <span style={{ fontSize: '10px', opacity: sortConfig?.key === col.key ? 1 : 0.2 }}>
+                        {sortConfig?.key === col.key ? (sortConfig.direction === 'asc' ? '▲' : '▼') : '↕'}
+                      </span>
+                    </div>
+                  </th>
+                ))}
+                <th style={{ fontSize: '11px', color: '#64748b' }}>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedData.map(item => (
+                <tr key={item.id}>
+                  <td style={{ height: '56px', verticalAlign: 'middle' }}><input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)} /></td>
+                  <td style={{ fontWeight: 600, color: '#1e293b', height: '56px', verticalAlign: 'middle' }}>{item.name}</td>
+                  <td style={{ color: '#64748b', fontSize: '12px', height: '56px', verticalAlign: 'middle' }}>{item.codeReferral}</td>
+                  <td style={{ color: '#64748b', height: '56px', verticalAlign: 'middle' }}>{item.branchCode || '-'}</td>
+                  <td style={{ color: '#64748b', height: '56px', verticalAlign: 'middle' }}>{new Date(item.createdAt).toLocaleDateString()}</td>
+                  {activeTab === 'GMM' ? (
+                    <>
+                      <td style={{ color: '#1e293b', height: '56px', verticalAlign: 'middle' }}>{item.noAccount || '-'}</td>
+                      <td style={{ color: '#1e293b', height: '56px', verticalAlign: 'middle' }}>{item.product || '-'}</td>
+                    </>
+                  ) : activeTab === 'KSM' || activeTab === 'KPR' || activeTab === 'CC' ? (
+                    <td style={{ color: '#1e293b', height: '56px', verticalAlign: 'middle' }}>{item.bookingId || '-'}</td>
+                  ) : null}
+                  <td style={{ height: '56px', verticalAlign: 'middle' }}>
+                    <span className={`status-badge status-${item.status.toLowerCase()}`}>
+                      • {item.status}
+                    </span>
+                  </td>
+                  <td style={{ height: '56px', verticalAlign: 'middle' }}>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', height: '100%' }}>
+                      {isAdmin && item.status === 'PENDING' && (
+                        <>
+                          <button
+                            onClick={() => handleVerify(item.id)}
+                            title="Verify"
+                            style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', padding: '6px' }}
+                            className="btn btn-sm"
+                          >✅</button>
+                          <button
+                            onClick={() => handleReject(item.id)}
+                            title="Reject"
+                            style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', padding: '6px' }}
+                            className="btn btn-sm"
+                          >❌</button>
+                        </>
+                      )}
+                      <button className="btn btn-secondary btn-sm" style={{ padding: '6px' }} onClick={() => {
+                        setEditingEntry(item);
+                        setFormType(item.activityType as ActivityType);
+                        setForm({
+                          name: item.name,
+                          codeReferral: item.codeReferral,
+                          noAccounts: item.noAccount ? item.noAccount.split(', ') : [''],
+                          product: item.product,
+                          amount: String(item.amount),
+                          target: String(item.target),
+                          total: String(item.total),
+                          bookingIds: item.bookingId ? item.bookingId.split(', ') : [''],
+                          branchCode: item.branchCode || ''
+                        });
+                        setShowModal(true);
+                      }}>✏️</button>
+                      <button className="btn btn-danger btn-sm" style={{ padding: '6px' }} onClick={() => handleDelete(item.id)}>🗑️</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredData.length === 0 && (
+                <tr>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
+                    Tidak ada riwayat {activeTab}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
 
+        {/* Pagination Controls */}
+        {filteredData.length > 0 && (
+          <div style={{
+            padding: '16px 20px',
+            borderTop: '1px solid #e2e8f0',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'white'
+          }}>
+            <div style={{ fontSize: '14px', color: '#64748b' }}>
+              Showing <b>{(page - 1) * pageSize + 1}</b> to <b>{Math.min(page * pageSize, filteredData.length)}</b> of <b>{filteredData.length}</b> activity
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setPage(1)}
+                disabled={page === 1}
+                style={{
+                  background: 'white',
+                  border: '1px solid #e2e8f0',
+                  color: page === 1 ? '#cbd5e1' : '#64748b',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  cursor: page === 1 ? 'not-allowed' : 'pointer',
+                  fontSize: '13px'
+                }}
+              >
+                First
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                style={{
+                  background: 'white',
+                  border: '1px solid #e2e8f0',
+                  color: page === 1 ? '#cbd5e1' : '#64748b',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  cursor: page === 1 ? 'not-allowed' : 'pointer',
+                  fontSize: '13px'
+                }}
+              >
+                « Prev
+              </button>
+
+              <div style={{ display: 'flex', gap: '4px' }}>
+                {(() => {
+                  let start = Math.max(1, page - 1);
+                  let end = Math.min(totalPages, start + 2);
+                  if (end === totalPages) start = Math.max(1, end - 2);
+
+                  const buttons = [];
+                  for (let i = start; i <= end; i++) {
+                    buttons.push(
+                      <button
+                        key={i}
+                        onClick={() => setPage(i)}
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '8px',
+                          border: page === i ? 'none' : '1px solid #e2e8f0',
+                          background: page === i ? '#0052cc' : 'white',
+                          color: page === i ? 'white' : '#64748b',
+                          fontSize: '14px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {i}
+                      </button>
+                    );
+                  }
+                  return buttons;
+                })()}
+              </div>
+
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                style={{
+                  background: 'white',
+                  border: '1px solid #e2e8f0',
+                  color: page === totalPages ? '#cbd5e1' : '#64748b',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  cursor: page === totalPages ? 'not-allowed' : 'pointer',
+                  fontSize: '13px'
+                }}
+              >
+                Next »
+              </button>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setPage(totalPages)}
+                disabled={page === totalPages}
+                style={{
+                  background: 'white',
+                  border: '1px solid #e2e8f0',
+                  color: page === totalPages ? '#cbd5e1' : '#64748b',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  cursor: page === totalPages ? 'not-allowed' : 'pointer',
+                  fontSize: '13px'
+                }}
+              >
+                Last
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* Bulk Action Floating Bar */}
+      {selectedIds.size > 0 && isAdmin && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 1000,
+          background: '#1e293b',
+          color: 'white',
+          padding: '12px 24px',
+          borderRadius: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '20px',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+          border: '1px solid rgba(255,255,255,0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ background: 'rgba(255,255,255,0.1)', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700 }}>{selectedIds.size}</div>
+            <span style={{ fontSize: '14px', fontWeight: 600 }}>Tindakan Terpilih</span>
+          </div>
+          <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)' }} />
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn" style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={handleBulkVerify}>Verify</button>
+            <button className="btn" style={{ background: '#f43f5e', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={handleBulkReject}>Reject</button>
+            <button className="btn" style={{ background: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={handleBulkDelete}>Delete All</button>
+          </div>
+          <button style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '18px', padding: '4px' }} onClick={() => setSelectedIds(new Set())}>✕</button>
+        </div>
+      )}
+
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <h2 className="modal-title">{editingEntry ? 'Edit Entry GMM' : 'Input Entry GMM Baru'}</h2>
-            {error && (
-              <div className="form-error" style={{ marginBottom: '16px', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--accent-red)', borderRadius: '8px', fontSize: '13px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                <strong>Error: </strong> {error}
-                {errorDetails && (
-                  <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(0,0,0,0.05)', borderRadius: '4px', fontFamily: 'monospace', fontSize: '11px', wordBreak: 'break-all' }}>
-                    {errorDetails}
-                  </div>
+        <div className="modal-overlay" style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)' }} onClick={() => setShowModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '500px', borderRadius: '20px', padding: '24px' }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#1e293b', marginBottom: '20px' }}>Input {formType} Baru</h2>
+
+            <div className="form-group">
+              <label style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', marginBottom: '8px', display: 'block' }}>Tipe Activity</label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px' }}>
+                {ACTIVITY_TYPES.map(type => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setFormType(type)}
+                    style={{
+                      padding: '8px',
+                      borderRadius: '8px',
+                      border: formType === type ? 'none' : '1px solid #e2e8f0',
+                      background: formType === type ? '#00abc6' : 'white',
+                      color: formType === type ? 'white' : '#64748b',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <span style={{ fontSize: '14px' }}>
+                      {type === 'GMM' ? '📊' : type === 'KSM' ? '🚗' : type === 'KPR' ? '🏠' : '💳'}
+                    </span>
+                    {type}
+                  </button>
+                ))}
+              </div>
+              <div style={{ fontSize: '11px', color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                {formType === 'GMM' ? (
+                  <span style={{ color: '#f59e0b' }}>⚠️ GMM memerlukan verifikasi admin</span>
+                ) : (
+                  <>✅ {formType} tidak perlu verifikasi admin — otomatis verified</>
                 )}
               </div>
-            )}
-            <form onSubmit={handleSubmit}>
+            </div>
+
+            <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
               <div className="form-group">
-                <label>Nama Employee</label>
-                <input className="form-input" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required readOnly={!isAdmin} />
+                <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>NAMA EMPLOYEE</label>
+                <input className="form-input" style={{ background: '#f8fafc', fontWeight: 600 }} value={form.name} readOnly />
               </div>
-              <div className="form-grid-2">
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div className="form-group">
-                  <label>Code Refferal</label>
-                  <input className="form-input" value={form.codeReferral} onChange={e => setForm({...form, codeReferral: e.target.value})} required />
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>CODE REFERRAL</label>
+                  <input className="form-input" value={form.codeReferral} onChange={e => setForm({ ...form, codeReferral: e.target.value })} required />
                 </div>
                 <div className="form-group">
-                  <label>No Account</label>
-                  <input className="form-input" value={form.noAccount} onChange={e => {
-                    const val = e.target.value;
-                    if (/^\d*$/.test(val)) setForm({...form, noAccount: val});
-                  }} required />
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>CODE CABANG (OPTIONAL)</label>
+                  <input className="form-input" placeholder="Masukkan kode cabang" value={form.branchCode} onChange={e => setForm({ ...form, branchCode: e.target.value })} />
                 </div>
               </div>
-              <div className="form-group">
-                <label>Produk</label>
-                <input className="form-input" value={form.product} onChange={e => setForm({...form, product: e.target.value})} required />
-              </div>
-              <div className="form-grid-3">
-                <div className="form-group">
-                  <label>Amount</label>
-                  <input type="number" min="0" className="form-input" value={form.amount} onChange={e => {
-                    const val = e.target.value;
-                    if (val === '' || Number(val) >= 0) setForm({...form, amount: val});
-                  }} required />
+
+              {formType === 'GMM' ? (
+                <>
+                  <div className="form-group" style={{ marginBottom: '16px' }}>
+                    <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>NO ACCOUNT (GMM)</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                      {form.noAccounts.map((no, idx) => (
+                        <div key={idx} style={{ display: 'flex', gap: '8px' }}>
+                          <input className="form-input" style={{ flex: 1 }} value={no} placeholder={`No Account ${idx+1}`} onChange={e => {
+                            const newNo = [...form.noAccounts];
+                            newNo[idx] = e.target.value;
+                            setForm({ ...form, noAccounts: newNo });
+                          }} required={idx === 0} />
+                          {idx === 0 ? (
+                            <button type="button" onClick={() => setForm({ ...form, noAccounts: [...form.noAccounts, ''] })} style={{ width: '40px', height: '40px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', fontSize: '18px', fontWeight: 600, color: '#00abc6' }}> + </button>
+                          ) : (
+                            <button type="button" onClick={() => {
+                              const newNo = [...form.noAccounts];
+                              newNo.splice(idx, 1);
+                              setForm({ ...form, noAccounts: newNo });
+                            }} style={{ width: '40px', height: '40px', borderRadius: '8px', border: '1px solid #fee2e2', background: 'white', cursor: 'pointer', fontSize: '14px', color: '#ef4444' }}> ✕ </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>PRODUCT</label>
+                    <input className="form-input" placeholder="Contoh: Tabungan, Deposito, dll" value={form.product} onChange={e => setForm({ ...form, product: e.target.value })} required />
+                  </div>
+                </>
+              ) : (
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>BOOKING ID ({formType})</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                    {form.bookingIds.map((id, idx) => (
+                      <div key={idx} style={{ display: 'flex', gap: '8px' }}>
+                        <input className="form-input" style={{ flex: 1 }} value={id} placeholder={`Booking ID ${idx+1}`} onChange={e => {
+                          const newIds = [...form.bookingIds];
+                          newIds[idx] = e.target.value;
+                          setForm({ ...form, bookingIds: newIds });
+                        }} required={idx === 0} />
+                        {idx === 0 ? (
+                          <button type="button" onClick={() => setForm({ ...form, bookingIds: [...form.bookingIds, ''] })} style={{ width: '40px', height: '40px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', fontSize: '18px', fontWeight: 600, color: '#00abc6' }}> + </button>
+                        ) : (
+                          <button type="button" onClick={() => {
+                            const newIds = [...form.bookingIds];
+                            newIds.splice(idx, 1);
+                            setForm({ ...form, bookingIds: newIds });
+                          }} style={{ width: '40px', height: '40px', borderRadius: '8px', border: '1px solid #fee2e2', background: 'white', cursor: 'pointer', fontSize: '14px', color: '#ef4444' }}> ✕ </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label>Target</label>
-                  <input type="number" min="0" className="form-input" value={form.target} onChange={e => {
-                    const val = e.target.value;
-                    if (val === '' || Number(val) >= 0) setForm({...form, target: val});
-                  }} required />
-                </div>
-                <div className="form-group">
-                  <label>Total (Auto)</label>
-                  <input type="number" className="form-input" value={form.total} readOnly style={{ background: 'var(--bg-primary)', cursor: 'not-allowed' }} />
-                </div>
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowModal(false)}>Batal</button>
-                <button type="submit" className="btn btn-primary btn-sm">Simpan Entry</button>
+              )}
+
+              <div className="modal-actions" style={{ gap: '12px' }}>
+                <button type="button" className="btn btn-secondary" style={{ flex: 1, borderRadius: '10px', border: '1px solid #e2e8f0', color: '#1e293b' }} onClick={() => setShowModal(false)}>Batal</button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 2, borderRadius: '10px', background: '#00abc6', border: 'none' }}>Simpan Entry</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {showDeleteModal && (
-        <div className="modal-overlay" onClick={() => setShowDeleteModal(null)}>
-          <div className="modal-content" style={{ maxWidth: '400px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: '48px', color: 'var(--accent-red)', marginBottom: '16px' }}>⚠️</div>
-            <h2 className="modal-title">Hapus Entry</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>Apakah Anda yakin ingin menghapus data monitoring ini? Tindakan ini tidak dapat dibatalkan.</p>
-            <div className="modal-actions" style={{ justifyContent: 'center' }}>
-              <button className="btn btn-secondary" onClick={() => setShowDeleteModal(null)}>Batal</button>
-              <button className="btn btn-danger" onClick={confirmDelete}>Hapus Permanen</button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Buk Action Confirmation Modal */}
-      {bulkActionConfirm && (
-        <div className="modal-overlay" onClick={() => setBulkActionConfirm(null)}>
-          <div className="modal-content" style={{ maxWidth: '400px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>
-              {bulkActionConfirm.action === 'DELETE' ? '⚠️' : bulkActionConfirm.action === 'VERIFY' ? '✅' : '❌'}
+      <style jsx>{`
+        .tab-btn {
+          border: 1px solid #e2e8f0;
+          background: #f8fafc;
+          color: #64748b;
+        }
+        .tab-btn.active {
+          background: white !important;
+          color: #1e293b !important;
+          border-color: #3b82f6 !important;
+          border-width: 2px !important;
+        }
+        .tab-btn:hover {
+          background: white;
+        }
+        .form-input {
+          height: 40px;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          padding: 0 12px;
+          font-size: 13px;
+          width: 100%;
+        }
+        .form-input:focus {
+          border-color: #3b82f6;
+          outline: none;
+        }
+        .status-badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 4px 10px;
+          border-radius: 20px;
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+        }
+        .status-verified {
+          background: #ecfdf5 !important;
+          color: #10b981 !important;
+        }
+        .status-rejected {
+          background: #fef2f2 !important;
+          color: #ef4444 !important;
+        }
+        .status-pending {
+          background: #eff6ff !important;
+          color: #3b82f6 !important;
+        }
+      `}</style>
+      {showConfirmModal.visible && (
+        <div className="modal-overlay" style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 2000 }} onClick={() => setShowConfirmModal(prev => ({ ...prev, visible: false }))}>
+          <div className="modal-content" style={{ maxWidth: '400px', borderRadius: '24px', padding: '32px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <div style={{
+              fontSize: '48px',
+              marginBottom: '20px',
+              background: showConfirmModal.type === 'danger' ? 'rgba(244, 63, 94, 0.1)' :
+                showConfirmModal.type === 'warning' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 24px'
+            }}>
+              {showConfirmModal.type === 'danger' ? '⚠️' : '❓'}
             </div>
-            <h2 className="modal-title">Konfirmasi {bulkActionConfirm.action === 'DELETE' ? 'Penghapusan' : bulkActionConfirm.action === 'VERIFY' ? 'Verifikasi' : 'Penolakan'}</h2>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>
-              Apakah Anda yakin ingin {bulkActionConfirm.action === 'DELETE' ? 'menghapus secara permanen' : bulkActionConfirm.action === 'VERIFY' ? 'memverifikasi' : 'menolak'} <strong>{bulkActionConfirm.count} data</strong> sekaligus?
-            </p>
-            <div className="modal-actions" style={{ justifyContent: 'center' }}>
-              <button className="btn btn-secondary" disabled={loading} onClick={() => setBulkActionConfirm(null)}>Batal</button>
-              <button 
-                className={`btn ${bulkActionConfirm.action === 'DELETE' || bulkActionConfirm.action === 'REJECT' ? 'btn-danger' : 'btn-primary'}`} 
-                disabled={loading}
-                onClick={executeBulkAction}
-                style={bulkActionConfirm.action === 'VERIFY' ? { background: 'var(--accent-green)' } : {}}
-              >
-                {loading ? 'Memproses...' : 'Ya, Lanjutkan'}
-              </button>
+            <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '12px', color: 'var(--text-primary)' }}>{showConfirmModal.title}</h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.6', marginBottom: '32px' }}>{showConfirmModal.message}</p>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                className="btn btn-secondary"
+                style={{ flex: 1, borderRadius: '12px', padding: '12px', fontWeight: 600 }}
+                onClick={() => setShowConfirmModal(prev => ({ ...prev, visible: false }))}
+              >Cancel</button>
+              <button
+                className="btn"
+                style={{
+                  flex: 1,
+                  borderRadius: '12px',
+                  padding: '12px',
+                  fontWeight: 600,
+                  background: showConfirmModal.type === 'danger' ? '#f43f5e' :
+                    showConfirmModal.type === 'warning' ? '#f59e0b' : '#10b981',
+                  color: 'white',
+                  border: 'none'
+                }}
+                onClick={showConfirmModal.action}
+              >Confirm</button>
             </div>
           </div>
         </div>

@@ -13,20 +13,23 @@ export async function GET() {
     const { role, userId } = session;
     const isUser = role !== 'ADMIN';
 
-    // Base filter for regular users: tasks assigned to them
-    const baseWhere = isUser ? { assigneeId: userId } : {};
+    // Base filter for regular users
     const baseLeadWhere = isUser ? { owner_user_id: userId } : {};
+
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const endOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
 
     const [
       totalTasks, openTasks, inProgressTasks, doneTasks,
       totalLeads, wonLeads, totalUsers,
       leadsList,
-      usersList
+      usersList,
+      gmmStats, ksmStats, kprStats, ccStats
     ] = await Promise.all([
-      prisma.task.count({ where: baseWhere }),
-      prisma.task.count({ where: { ...baseWhere, status: 'OPEN' } }),
-      prisma.task.count({ where: { ...baseWhere, status: 'IN_PROGRESS' } }),
-      prisma.task.count({ where: { ...baseWhere, status: 'DONE' } }),
+      prisma.task.count({ where: isUser ? { assigneeId: userId } : {} }),
+      prisma.task.count({ where: { ...(isUser ? { assigneeId: userId } : {}), status: 'OPEN' } }),
+      prisma.task.count({ where: { ...(isUser ? { assigneeId: userId } : {}), status: 'IN_PROGRESS' } }),
+      prisma.task.count({ where: { ...(isUser ? { assigneeId: userId } : {}), status: 'DONE' } }),
       
       prisma.lead.count({ where: baseLeadWhere }),
       prisma.lead.count({ where: { ...baseLeadWhere, status: 'WON' } }),
@@ -36,8 +39,34 @@ export async function GET() {
          where: baseLeadWhere, 
          select: { status: true, last_activity_at: true, createdAt: true, potential_amount: true, owner_user_id: true } 
       }),
-      prisma.user.findMany({ select: { id: true, name: true } })
+      prisma.user.findMany({ select: { id: true, name: true } }),
+      
+      prisma.monitoringActivity.aggregate({
+        where: { activityType: 'GMM', status: 'VERIFIED', createdAt: { gte: startOfMonth, lte: endOfMonth } },
+        _count: true, _sum: { amount: true }
+      }),
+      prisma.monitoringActivity.aggregate({
+        where: { activityType: 'KSM', createdAt: { gte: startOfMonth, lte: endOfMonth } },
+        _count: true, _sum: { amount: true }
+      }),
+      prisma.monitoringActivity.aggregate({
+        where: { activityType: 'KPR', createdAt: { gte: startOfMonth, lte: endOfMonth } },
+        _count: true, _sum: { amount: true }
+      }),
+      prisma.monitoringActivity.aggregate({
+        where: { activityType: 'CC', createdAt: { gte: startOfMonth, lte: endOfMonth } },
+        _count: true, _sum: { amount: true }
+      })
     ]);
+
+    const activityStats = {
+      GMM: { count: gmmStats._count || 0, amount: Number(gmmStats._sum.amount) || 0 },
+      KSM: { count: ksmStats._count || 0, amount: Number(ksmStats._sum.amount) || 0 },
+      KPR: { count: kprStats._count || 0, amount: Number(kprStats._sum.amount) || 0 },
+      CC: { count: ccStats._count || 0, amount: Number(ccStats._sum.amount) || 0 },
+      totalCount: (gmmStats._count || 0) + (ksmStats._count || 0) + (kprStats._count || 0) + (ccStats._count || 0),
+      totalAmount: (Number(gmmStats._sum.amount) || 0) + (Number(ksmStats._sum.amount) || 0) + (Number(kprStats._sum.amount) || 0) + (Number(ccStats._sum.amount) || 0)
+    };
 
     let fresh = 0;
     let warning = 0;
@@ -78,7 +107,8 @@ export async function GET() {
         totalLeads, wonLeads, totalUsers,
         pipelineAmount, wonAmount,
         aging: { fresh, warning, critical },
-        leaderboard
+        leaderboard,
+        activityStats
       },
     });
   } catch(e: any) {
