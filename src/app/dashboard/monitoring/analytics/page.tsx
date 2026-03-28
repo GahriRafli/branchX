@@ -67,13 +67,30 @@ export default function MonitoringAnalyticsPage() {
 
   const stats = useMemo(() => {
     const filtered = allData.filter(item => item.activityType === activeTab);
-    const verifiedFiltered = filtered.filter(item => item.status !== 'REJECTED'); // Count both Pending and Verified for progress
     
-    const totalAmount = verifiedFiltered.reduce((sum, item) => sum + item.amount, 0);
-    const totalTarget = filtered.reduce((sum, item) => sum + item.target, 0);
+    // Define success/failure statuses
+    const successStatuses = ['VERIFIED', 'Pengajuan Cair', 'Maintain Nasabah', 'NEW CIF', 'NTB'];
+    const failureStatuses = [
+      'REJECTED', 
+      'TAKEOUT', 
+      'Pengajuan Ditolak', 
+      'Dalam Proses Pengajuan (Ditolak)', 
+      'Pengajuan Tidak Tertarik'
+    ];
+
+    const exclusionStatuses = ['TAKEOUT', 'Dalam Proses Pengajuan (Ditolak)', 'Pengajuan Ditolak', 'REJECTED'];
+    const verifiedFiltered = filtered.filter(item => !failureStatuses.includes(item.status)); 
+    const targetFiltered = filtered.filter(item => !exclusionStatuses.includes(item.status));
+    
+    const totalAmount = verifiedFiltered.reduce((sum: number, item: any) => sum + item.amount, 0);
+    const totalTarget = targetFiltered.reduce((sum: number, item: any) => sum + item.target, 0);
     const achievement = totalTarget > 0 ? (totalAmount / totalTarget) * 100 : 0;
-    const pendingCount = filtered.filter(item => item.status === 'PENDING').length;
-    const verifiedCount = filtered.filter(item => item.status === 'VERIFIED').length;
+    
+    const pendingCount = filtered.filter(item => 
+      !successStatuses.includes(item.status) && !failureStatuses.includes(item.status)
+    ).length;
+    
+    const verifiedCount = filtered.filter(item => successStatuses.includes(item.status)).length;
 
     return { totalAmount, totalTarget, achievement: Math.round(achievement) + '%', pendingCount, verifiedCount };
   }, [allData, activeTab]);
@@ -84,11 +101,22 @@ export default function MonitoringAnalyticsPage() {
       if (!acc[item.name]) {
         acc[item.name] = { name: item.name, amount: 0, target: 0 };
       }
-      const shouldCountAmount = item.status !== 'REJECTED';
-      if (item.status !== 'REJECTED' && shouldCountAmount) {
+      
+      const failureStatuses = [
+        'REJECTED', 
+        'TAKEOUT', 
+        'Pengajuan Ditolak', 
+        'Dalam Proses Pengajuan (Ditolak)', 
+        'Pengajuan Tidak Tertarik'
+      ];
+      
+      const exclusionStatuses = ['TAKEOUT', 'Dalam Proses Pengajuan (Ditolak)', 'Pengajuan Ditolak', 'REJECTED'];
+      if (!failureStatuses.includes(item.status)) {
         acc[item.name].amount += item.amount;
       }
-      acc[item.name].target += item.target;
+      if (!exclusionStatuses.includes(item.status)) {
+        acc[item.name].target += item.target;
+      }
       return acc;
     }, {});
     return Object.values(grouped);
@@ -236,6 +264,75 @@ export default function MonitoringAnalyticsPage() {
             )}
           </div>
         ))}
+      </div>
+
+      <div style={{ marginBottom: '32px' }}>
+        <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#1e293b', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '24px' }}>📈</span> Status Breakdown
+        </h3>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gap: '20px'
+        }}>
+          {(activeTab === 'GMM' ? [
+            { s: 'PENDING', i: '⏳' },
+            { s: 'NEW CIF', i: '🆕' },
+            { s: 'NTB', i: '🏛️' }
+          ] : [
+            { s: 'Belum ada Pengajuan', i: '📝' },
+            { s: 'Pengajuan Sudah (Tertarik)', i: '🎯' },
+            { s: 'Pengajuan Sudah (Custom / Tidak Respond)', i: '📵' },
+            { s: 'Pengajuan Tidak Tertarik', i: '🚫' },
+            { s: 'Dalam Proses Pengajuan (Lancar)', i: '⚙️' },
+            { s: 'Dalam Proses Pengajuan (Perlu Ralat / Sendback)', i: '⚠️' },
+            { s: 'Pengajuan Diterima', i: '📥' },
+            { s: 'Pengajuan Cair', i: '💎' },
+            { s: 'Maintain Nasabah', i: '🤝' }
+          ]).map(statusObj => {
+            const count = allData.filter(d => d.activityType === activeTab && d.status === statusObj.s).length;
+            const successStatuses = ['VERIFIED', 'Pengajuan Cair', 'Maintain Nasabah', 'NEW CIF', 'NTB'];
+            const failureStatuses = ['REJECTED', 'TAKEOUT', 'Pengajuan Ditolak', 'Dalam Proses Pengajuan (Ditolak)', 'Pengajuan Tidak Tertarik'];
+            
+            const color = successStatuses.includes(statusObj.s) ? '#10b981' : 
+                         failureStatuses.includes(statusObj.s) ? '#ef4444' : '#3b82f6';
+
+            return (
+              <div key={statusObj.s} className="card" style={{ 
+                padding: '20px', 
+                borderRadius: '20px', 
+                border: '1px solid var(--border-subtle)',
+                background: 'var(--bg-card)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                boxShadow: '0 4px 15px rgba(0,0,0,0.02)',
+                transition: 'transform 0.2s ease'
+              }}>
+                <div style={{ 
+                  width: '40px', 
+                  height: '40px', 
+                  borderRadius: '12px', 
+                  background: `${color}10`, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  fontSize: '20px'
+                }}>
+                  {statusObj.i}
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>
+                    {statusObj.s}
+                  </div>
+                  <div style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    {count}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {aggregatedChartData.length > 0 && (

@@ -42,7 +42,34 @@ export async function GET(request: Request) {
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ data });
+    // Automatic Transitions Logic (1 day)
+    const now = new Date();
+    const oneDayInMs = 24 * 60 * 60 * 1000;
+    const updatedData = await Promise.all(data.map(async (item: any) => {
+      let currentStatus = item.status;
+      const timeSinceUpdate = now.getTime() - new Date(item.updatedAt).getTime();
+
+      if (timeSinceUpdate > oneDayInMs) {
+        if (currentStatus === 'Pengajuan Sudah (Custom / Tidak Respond)') {
+          currentStatus = 'TAKEOUT';
+        } else if (currentStatus === 'Dalam Proses Pengajuan (Perlu Ralat / Sendback)') {
+          currentStatus = 'Dalam Proses Pengajuan (Ditolak)';
+        } else if (currentStatus === 'Pengajuan Cair') {
+          currentStatus = 'Maintain Nasabah';
+        }
+
+        if (currentStatus !== item.status) {
+          await (prisma as any).monitoringActivity.update({
+            where: { id: item.id },
+            data: { status: currentStatus }
+          });
+          return { ...item, status: currentStatus };
+        }
+      }
+      return item;
+    }));
+
+    return NextResponse.json({ data: updatedData });
   } catch (err: any) {
     console.error('GET Monitoring error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -71,22 +98,19 @@ export async function POST(request: Request) {
       target, 
       total, 
       activityType, 
-      bookingId, 
       branchCode
     } = body;
 
     const type = activityType || 'GMM';
-    const status = (type === 'GMM') ? 'PENDING' : 'VERIFIED';
+    const isGMM = type === 'GMM';
+    const status = isGMM ? 'PENDING' : 'Belum ada Pengajuan';
     
     const inputAmount = parseFloat(String(amount)) || 1;
     const inputTarget = parseFloat(String(target)) || 1;
     const inputTotal = parseFloat(String(total)) || 1;
 
-    // Check for bulk values in either noAccount or bookingId based on type
-    const targetField = (type === 'KSM' || type === 'KPR') ? 'bookingId' : 'noAccount';
-    
     let values: string[] = [];
-    const rawVal = (targetField === 'bookingId' ? bookingId : noAccount);
+    const rawVal = noAccount;
     
     if (Array.isArray(rawVal)) {
       values = rawVal.map(v => String(v).trim()).filter(Boolean);
@@ -101,8 +125,7 @@ export async function POST(request: Request) {
         activityType: type,
         name: String(name || 'Unknown'),
         codeReferral: String(codeReferral || ''),
-        noAccount: targetField === 'noAccount' ? val : String(noAccount || ''),
-        bookingId: targetField === 'bookingId' ? val : String(bookingId || ''),
+        noAccount: val,
         product: String(product || ''),
         amount: inputAmount,
         target: inputTarget,
@@ -138,12 +161,11 @@ export async function POST(request: Request) {
         activityType: type,
         name: String(name || 'Unknown'), 
         codeReferral: String(codeReferral || ''), 
-        noAccount: targetField === 'noAccount' ? (values[0] || "") : String(noAccount || ""),
+        noAccount: values[0] || "",
         product: String(product || ''), 
         amount: inputAmount, 
         target: inputTarget, 
         total: inputTotal,
-        bookingId: targetField === 'bookingId' ? (values[0] || "") : String(bookingId || ""),
         branchCode: String(branchCode || ''),
         userId: session.userId,
         status
@@ -226,12 +248,17 @@ export async function PATCH(request: Request) {
       delete updateData.status;
     }
 
-    // Only allow verify/reject for GMM type entries
+    // Only allow status changes if admin (except for GMM pending logic which is already restricted)
+    if (updateData.status && !isAdmin) {
+      delete updateData.status;
+    }
+
+    // GMM specific manual validation logic remains for admin
     if (updateData.status && (updateData.status === 'VERIFIED' || updateData.status === 'REJECTED')) {
       const existing = await (prisma as any).monitoringActivity.findUnique({ where: { id } });
       if (existing && existing.activityType !== 'GMM') {
-        // Non-GMM entries cannot be manually verified/rejected
-        delete updateData.status;
+        // Non-GMM entries cannot be manually verified/rejected via the GMM flow
+        // but they can have their status updated if it's a valid status from the new flow
       }
     }
 

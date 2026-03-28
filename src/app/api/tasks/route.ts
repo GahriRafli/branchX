@@ -25,15 +25,37 @@ export async function GET() {
   }
 }
 
-// POST create a task (admin only)
+// POST create a task (admin or assigned user)
 export async function POST(request: Request) {
   try {
     const session = await getSession();
-    if (!session || session.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { title, description, priority, status, assigneeId, leadId } = await request.json();
+
+    // Security check for non-admins
+    if (session.role !== 'ADMIN') {
+      if (!leadId) {
+        return NextResponse.json({ error: 'Standard users can only create tasks for leads' }, { status: 403 });
+      }
+      
+      // Check if user is allowed to add task to this lead (owner or already has tasks)
+      const lead = await prisma.lead.findUnique({
+        where: { id: leadId },
+        include: { tasks: { where: { assigneeId: session.userId } } }
+      });
+
+      if (!lead || (lead.owner_user_id !== session.userId && lead.tasks.length === 0)) {
+        return NextResponse.json({ error: 'Forbidden: You are not assigned to this lead' }, { status: 403 });
+      }
+
+      // Non-admins must assign to themselves
+      if (assigneeId && assigneeId !== session.userId) {
+        return NextResponse.json({ error: 'Forbidden: You can only assign tasks to yourself' }, { status: 403 });
+      }
+    }
 
     const task = await prisma.task.create({
       data: {
@@ -41,7 +63,7 @@ export async function POST(request: Request) {
         description: description || '',
         priority: priority || 'MEDIUM',
         status: status || 'OPEN',
-        assigneeId: assigneeId || null,
+        assigneeId: session.role === 'ADMIN' ? (assigneeId || null) : session.userId,
         leadId: leadId || null,
       },
       include: { assignee: { select: { id: true, name: true, nip: true } } },

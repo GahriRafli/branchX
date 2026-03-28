@@ -207,7 +207,7 @@ export default function DashboardMainPage() {
       </div>
 
 
-      <div className="charts-grid" id="tour-dash-chart" style={{ display: 'grid', gridTemplateColumns: isAdmin ? '1fr 1fr 1fr' : '1fr 1fr', gap: '24px', marginTop: '24px' }}>
+      <div className="charts-grid" id="tour-dash-chart" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginTop: '24px' }}>
         <div className="chart-card" style={{ background: 'var(--bg-card)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
           <div className="chart-title" style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Lead Ageing Distribution</div>
           <ResponsiveContainer width="100%" height={260}>

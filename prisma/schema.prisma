@@ -45,7 +45,6 @@ model MonitoringActivity {
   target       Float    @default(0)
   total       Float    @default(0)
   noAccount    String   @default("")
-  bookingId    String   @default("")
   branchCode   String   @default("")
   status       String   @default("PENDING")
   userId       String?

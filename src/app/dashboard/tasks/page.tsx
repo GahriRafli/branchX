@@ -581,13 +581,18 @@ function TasksPageContent() {
                   <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '20px 24px', background: 'var(--bg-main)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                       <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>Activity & Sub-tasks</h4>
-                      {isAdmin && (
-                        <button className="btn btn-primary btn-sm" onClick={() => {
-                          setEditingTask(null);
-                          setTaskForm({ title: '', description: '', priority: 'MEDIUM', status: 'OPEN', assigneeId: lead.owner_user_id || '', leadId: lead.id });
-                          setShowTaskModal(true);
-                        }}>+ Add Follow Up Task</button>
-                      )}
+                      <button className="btn btn-primary btn-sm" onClick={() => {
+                        setEditingTask(null);
+                        setTaskForm({ 
+                          title: '', 
+                          description: '', 
+                          priority: 'MEDIUM', 
+                          status: 'OPEN', 
+                          assigneeId: isAdmin ? (lead.owner_user_id || '') : (user?.id || ''), 
+                          leadId: lead.id 
+                        });
+                        setShowTaskModal(true);
+                      }}>+ Add Follow Up Task</button>
                     </div>
                     <div className="table-container" style={{ borderRadius: '8px' }}>
                       <table className="data-table" style={{ background: 'var(--bg-card)', margin: 0 }}>
@@ -899,13 +904,15 @@ function TasksPageContent() {
                   </select>
                 </div>
               </div>
-              <div className="form-group">
-                <label>Assignee</label>
-                <select className="form-select" value={taskForm.assigneeId} onChange={e => setTaskForm({ ...taskForm, assigneeId: e.target.value })}>
-                  <option value="">Unassigned</option>
-                  {users.filter(u => u.role !== 'ADMIN').map(u => <option key={u.id} value={u.id}>{u.name} (NIP: {u.nip})</option>)}
-                </select>
-              </div>
+              {isAdmin && (
+                <div className="form-group">
+                  <label>Assignee</label>
+                  <select className="form-select" value={taskForm.assigneeId} onChange={e => setTaskForm({ ...taskForm, assigneeId: e.target.value })}>
+                    <option value="">Unassigned</option>
+                    {users.filter(u => u.role !== 'ADMIN').map(u => <option key={u.id} value={u.id}>{u.name} (NIP: {u.nip})</option>)}
+                  </select>
+                </div>
+              )}
               <div className="modal-actions">
                 <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowTaskModal(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary btn-sm">Save Task</button>

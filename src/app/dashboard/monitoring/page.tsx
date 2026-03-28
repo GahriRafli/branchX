@@ -14,13 +14,12 @@ interface MonitoringData {
   name: string;
   codeReferral: string;
   noAccount: string;
-  bookingId: string;
   branchCode: string;
   product: string;
   amount: number;
   target: number;
   total: number;
-  status: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  status: string;
   extraData?: any;
   createdAt: string;
   updatedAt: string;
@@ -76,8 +75,8 @@ export default function MonitoringPage() {
     amount: '0',
     target: '0',
     total: '0',
-    bookingIds: [''],
-    branchCode: ''
+    branchCode: '',
+    status: ''
   });
   const [error, setError] = useState('');
   const [errorDetails, setErrorDetails] = useState('');
@@ -148,24 +147,16 @@ export default function MonitoringPage() {
     };
 
     if (editingEntry) {
-      // For updates, we only send the first value as a string
-      if (formType === 'GMM' || formType === 'CC') {
-        body.noAccount = form.noAccounts[0] || '';
-      } else {
-        body.bookingId = form.bookingIds[0] || '';
-      }
+      body.noAccount = form.noAccounts[0] || '';
     } else {
-      // For creation, we send the array (or filter empty ones)
-      if (formType === 'GMM' || formType === 'CC') {
-        body.noAccount = form.noAccounts.filter(Boolean);
-      } else {
-        body.bookingId = form.bookingIds.filter(Boolean);
-      }
+      body.noAccount = form.noAccounts.filter(Boolean);
     }
+    
+    // Add status if provided
+    if (form.status) body.status = form.status;
 
-    // Remove the array versions from the body to avoid confusion
+    // Remove the array versions from the body
     delete body.noAccounts;
-    delete body.bookingIds;
 
     try {
       const res = await fetch('/api/monitoring', {
@@ -190,50 +181,50 @@ export default function MonitoringPage() {
     }
   };
 
-  const handleBulkVerify = async () => {
+  const handleBulkVerify = async (status: string = 'VERIFIED') => {
     if (selectedIds.size === 0) return;
     setShowConfirmModal({
       visible: true,
-      title: 'Verify Selected Activities',
-      message: `Are you sure you want to verify ${selectedIds.size} selected records?`,
+      title: `Bulk Update to ${status}`,
+      message: `Are you sure you want to update ${selectedIds.size} selected records to ${status}?`,
       type: 'success',
       action: async () => {
         const res = await fetch('/api/monitoring', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids: Array.from(selectedIds), status: 'VERIFIED' }),
+          body: JSON.stringify({ ids: Array.from(selectedIds), status }),
         });
         if (res.ok) {
           setSelectedIds(new Set());
           fetchData();
-          showToast('Verified', `${selectedIds.size} activities have been verified`, 'success');
+          showToast('Updated', `${selectedIds.size} activities have been updated to ${status}`, 'success');
         } else {
-          showToast('Error', 'Failed to verify activities', 'error');
+          showToast('Error', 'Failed to update activities', 'error');
         }
         setShowConfirmModal(prev => ({ ...prev, visible: false }));
       }
     });
   };
 
-  const handleBulkReject = async () => {
+  const handleBulkReject = async (status: string = 'REJECTED') => {
     if (selectedIds.size === 0) return;
     setShowConfirmModal({
       visible: true,
-      title: 'Reject Selected Activities',
-      message: `Are you sure you want to reject ${selectedIds.size} selected records?`,
+      title: `Bulk Update to ${status}`,
+      message: `Are you sure you want to update ${selectedIds.size} selected records to ${status}?`,
       type: 'danger',
       action: async () => {
         const res = await fetch('/api/monitoring', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids: Array.from(selectedIds), status: 'REJECTED' }),
+          body: JSON.stringify({ ids: Array.from(selectedIds), status }),
         });
         if (res.ok) {
           setSelectedIds(new Set());
           fetchData();
-          showToast('Rejected', `${selectedIds.size} activities have been rejected`, 'warning');
+          showToast('Updated', `${selectedIds.size} activities have been updated to ${status}`, 'warning');
         } else {
-          showToast('Error', 'Failed to reject activities', 'error');
+          showToast('Error', 'Failed to update activities', 'error');
         }
         setShowConfirmModal(prev => ({ ...prev, visible: false }));
       }
@@ -265,15 +256,15 @@ export default function MonitoringPage() {
     });
   };
 
-  const handleVerify = async (id: string) => {
+  const handleVerify = async (id: string, status: string = 'VERIFIED') => {
     const res = await fetch('/api/monitoring', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status: 'VERIFIED' }),
+      body: JSON.stringify({ id, status }),
     });
     if (res.ok) {
       fetchData();
-      showToast('Verified', 'Activity has been verified', 'success');
+      showToast('Verified', `Activity has been marked as ${status}`, 'success');
     } else {
       showToast('Error', 'Failed to verify activity', 'error');
     }
@@ -320,11 +311,14 @@ export default function MonitoringPage() {
   };
 
   const toggleSelectAll = (currentPageIds: string[]) => {
-    if (selectedIds.size === currentPageIds.length && currentPageIds.length > 0) {
-      setSelectedIds(new Set());
+    const allSelectedInPage = currentPageIds.every(id => selectedIds.has(id));
+    const newSelected = new Set(selectedIds);
+    if (allSelectedInPage) {
+      currentPageIds.forEach(id => newSelected.delete(id));
     } else {
-      setSelectedIds(new Set(currentPageIds));
+      currentPageIds.forEach(id => newSelected.add(id));
     }
+    setSelectedIds(newSelected);
   };
 
   // Filter logic including date range and role
@@ -343,7 +337,6 @@ export default function MonitoringPage() {
         item.name.toLowerCase().includes(s) ||
         item.codeReferral.toLowerCase().includes(s) ||
         (item.noAccount && item.noAccount.toLowerCase().includes(s)) ||
-        (item.bookingId && item.bookingId.toLowerCase().includes(s)) ||
         item.product.toLowerCase().includes(s) ||
         (item.branchCode && item.branchCode.toLowerCase().includes(s))
       );
@@ -384,26 +377,60 @@ export default function MonitoringPage() {
   };
 
   const exportToExcel = () => {
-    const ws = XLSX.utils.json_to_sheet(filteredData.map(item => ({
-      'Nama Employee': item.name,
-      'Code Referral': item.codeReferral,
-      'Code Cabang': item.branchCode || '-',
-      'Date': new Date(item.createdAt).toLocaleDateString(),
-      'No Account/Booking ID': item.noAccount || item.bookingId,
-      'Produk': item.product,
-      'Status': item.status
-    })));
+    let exportData;
+    if (activeTab === 'GMM') {
+      const summary: Record<string, { name: string, codeReferral: string, newCif: number, ntb: number, total: number }> = {};
+      filteredData.forEach(item => {
+        const key = item.codeReferral || item.name;
+        if (!summary[key]) summary[key] = { name: item.name, codeReferral: item.codeReferral, newCif: 0, ntb: 0, total: 0 };
+        if (item.status === 'NEW CIF') summary[key].newCif++;
+        else if (item.status === 'NTB') summary[key].ntb++;
+        summary[key].total++;
+      });
+      exportData = Object.values(summary).map(s => ({
+        'Nama Employee': s.name,
+        'Code Referral': s.codeReferral,
+        'Total New CIF': s.newCif,
+        'Total NTB': s.ntb,
+        'Grand Total': s.total
+      }));
+    } else {
+      exportData = filteredData.map(item => ({
+        'Nama Employee': item.name,
+        'Code Referral': item.codeReferral,
+        'Code Cabang': item.branchCode || '-',
+        'Date': new Date(item.createdAt).toLocaleDateString(),
+        'No Account': item.noAccount,
+        'Status': item.status
+      }));
+    }
+    const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, `Data ${activeTab}`);
     XLSX.writeFile(wb, `${activeTab}_Activity_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   const exportToCSV = () => {
-    const headers = ['Nama Employee', 'Code Referral', 'Code Cabang', 'Date', 'ID', 'Produk', 'Status'];
-    const rows = filteredData.map(item => [
-      item.name, item.codeReferral, item.branchCode || '-', new Date(item.createdAt).toLocaleDateString(), item.noAccount || item.bookingId, item.product, item.status
-    ]);
-    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    let csvContent;
+    if (activeTab === 'GMM') {
+      const headers = ['Nama Employee', 'Code Referral', 'Total New CIF', 'Total NTB', 'Grand Total'];
+      const summary: Record<string, { name: string, codeReferral: string, newCif: number, ntb: number, total: number }> = {};
+      filteredData.forEach(item => {
+        const key = item.codeReferral || item.name;
+        if (!summary[key]) summary[key] = { name: item.name, codeReferral: item.codeReferral, newCif: 0, ntb: 0, total: 0 };
+        if (item.status === 'NEW CIF') summary[key].newCif++;
+        else if (item.status === 'NTB') summary[key].ntb++;
+        summary[key].total++;
+      });
+      const rows = Object.values(summary).map(s => [s.name, s.codeReferral, s.newCif, s.ntb, s.total]);
+      csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    } else {
+      const headers = ['Nama Employee', 'Code Referral', 'Code Cabang', 'Date', 'No Account', 'Status'];
+      const rows = filteredData.map(item => [
+        item.name, item.codeReferral, item.branchCode || '-', new Date(item.createdAt).toLocaleDateString(), item.noAccount, item.status
+      ]);
+      csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    }
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -503,9 +530,11 @@ export default function MonitoringPage() {
       </div>
 
       <div className="card" style={{ borderRadius: '16px', border: '1px solid #e2e8f0', background: 'white', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#1e293b' }}>Data {activeTab}</h3>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: '#1e293b' }}>Data {activeTab}</h3>
+            </div>
             <button
               onClick={() => {
                 setEditingEntry(null);
@@ -518,8 +547,8 @@ export default function MonitoringPage() {
                   amount: '1',
                   target: '1',
                   total: '1',
-                  bookingIds: [''],
-                  branchCode: ''
+                  branchCode: '',
+                  status: ''
                 });
                 setShowModal(true);
               }}
@@ -540,22 +569,26 @@ export default function MonitoringPage() {
           </div>
         </div>
 
-        <div className="table-container" style={{ margin: 0, border: 'none' }}>
+        <div className="table-container" style={{ margin: 0, border: 'none', overflowX: 'auto' }}>
           <table className="data-table">
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                <th style={{ width: '40px' }}><input type="checkbox" onChange={() => toggleSelectAll(filteredData.map(d => d.id))} /></th>
+                <th style={{ width: '40px' }}><input type="checkbox" 
+                  checked={paginatedData.length > 0 && paginatedData.every(d => selectedIds.has(d.id))}
+                  onChange={() => toggleSelectAll(paginatedData.map(d => d.id))} 
+                /></th>
                 {[
                   { label: 'NAMA EMPLOYEE', key: 'name' },
                   { label: 'CODE REFERRAL', key: 'codeReferral' },
                   { label: 'CODE CABANG', key: 'branchCode' },
-                  { label: 'STATUS', key: 'status' },
+                  { label: 'DATE', key: 'createdAt' },
                   ...(activeTab === 'GMM' ? [
                     { label: 'NO ACCOUNT', key: 'noAccount' },
                     { label: 'PRODUCT', key: 'product' }
                   ] : activeTab === 'KSM' || activeTab === 'KPR' || activeTab === 'CC' ? [
-                    { label: 'BOOKING ID', key: 'bookingId' }
-                  ] : [])
+                    { label: 'NO ACCOUNT', key: 'noAccount' }
+                  ] : []),
+                  { label: 'STATUS', key: 'status' }
                 ].map(col => (
                   <th
                     key={col.key}
@@ -587,10 +620,14 @@ export default function MonitoringPage() {
                       <td style={{ color: '#1e293b', height: '56px', verticalAlign: 'middle' }}>{item.product || '-'}</td>
                     </>
                   ) : activeTab === 'KSM' || activeTab === 'KPR' || activeTab === 'CC' ? (
-                    <td style={{ color: '#1e293b', height: '56px', verticalAlign: 'middle' }}>{item.bookingId || '-'}</td>
+                    <td style={{ color: '#1e293b', height: '56px', verticalAlign: 'middle' }}>{item.noAccount || '-'}</td>
                   ) : null}
                   <td style={{ height: '56px', verticalAlign: 'middle' }}>
-                    <span className={`status-badge status-${item.status.toLowerCase()}`}>
+                    <span className={`status-badge ${
+                      ['VERIFIED', 'Pengajuan Cair', 'Maintain Nasabah', 'NEW CIF', 'NTB'].includes(item.status) ? 'status-verified' :
+                      ['REJECTED', 'TAKEOUT', 'Pengajuan Ditolak', 'Dalam Proses Pengajuan (Ditolak)', 'Pengajuan Tidak Tertarik'].includes(item.status) ? 'status-rejected' :
+                      'status-pending'
+                    }`}>
                       • {item.status}
                     </span>
                   </td>
@@ -598,12 +635,29 @@ export default function MonitoringPage() {
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center', height: '100%' }}>
                       {isAdmin && item.status === 'PENDING' && (
                         <>
-                          <button
-                            onClick={() => handleVerify(item.id)}
-                            title="Verify"
-                            style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', padding: '6px' }}
-                            className="btn btn-sm"
-                          >✅</button>
+                          {item.activityType === 'GMM' ? (
+                            <>
+                              <button
+                                onClick={() => handleVerify(item.id, 'NEW CIF')}
+                                title="New CIF"
+                                style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', padding: '6px', fontSize: '10px' }}
+                                className="btn btn-sm"
+                              >🆕 CIF</button>
+                              <button
+                                onClick={() => handleVerify(item.id, 'NTB')}
+                                title="NTB"
+                                style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '6px', fontSize: '10px' }}
+                                className="btn btn-sm"
+                              >🏛️ NTB</button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => handleVerify(item.id)}
+                              title="Verify"
+                              style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', padding: '6px' }}
+                              className="btn btn-sm"
+                            >✅</button>
+                          )}
                           <button
                             onClick={() => handleReject(item.id)}
                             title="Reject"
@@ -623,8 +677,8 @@ export default function MonitoringPage() {
                           amount: String(item.amount),
                           target: String(item.target),
                           total: String(item.total),
-                          bookingIds: item.bookingId ? item.bookingId.split(', ') : [''],
-                          branchCode: item.branchCode || ''
+                          branchCode: item.branchCode || '',
+                          status: item.status
                         });
                         setShowModal(true);
                       }}>✏️</button>
@@ -775,9 +829,13 @@ export default function MonitoringPage() {
           borderRadius: '16px',
           display: 'flex',
           alignItems: 'center',
-          gap: '20px',
-          boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-          border: '1px solid rgba(255,255,255,0.1)'
+          gap: '16px',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.3)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          maxWidth: '95vw',
+          width: 'max-content'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{ background: 'rgba(255,255,255,0.1)', width: '32px', height: '32px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700 }}>{selectedIds.size}</div>
@@ -785,8 +843,18 @@ export default function MonitoringPage() {
           </div>
           <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)' }} />
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn" style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={handleBulkVerify}>Verify</button>
-            <button className="btn" style={{ background: '#f43f5e', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={handleBulkReject}>Reject</button>
+            {activeTab === 'GMM' ? (
+              <>
+                <button className="btn" style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={() => handleBulkVerify('NEW CIF')}>🆕 NEW CIF</button>
+                <button className="btn" style={{ background: '#0ea5e9', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={() => handleBulkVerify('NTB')}>🏛️ NTB</button>
+                <button className="btn" style={{ background: '#f43f5e', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={() => handleBulkReject('REJECTED')}>Reject</button>
+              </>
+            ) : (
+              <>
+                <button className="btn" style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={() => handleBulkVerify('Pengajuan Cair')}>💎 Pengajuan Cair</button>
+                <button className="btn" style={{ background: '#f43f5e', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={() => handleBulkReject('Pengajuan Ditolak')}>✖️ Pengajuan Ditolak</button>
+              </>
+            )}
             <button className="btn" style={{ background: 'transparent', color: '#94a3b8', border: '1px solid #475569', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={handleBulkDelete}>Delete All</button>
           </div>
           <button style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '18px', padding: '4px' }} onClick={() => setSelectedIds(new Set())}>✕</button>
@@ -800,7 +868,7 @@ export default function MonitoringPage() {
 
             <div className="form-group">
               <label style={{ fontSize: '12px', fontWeight: 700, color: '#64748b', marginBottom: '8px', display: 'block' }}>Tipe Activity</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '8px', marginBottom: '12px' }}>
                 {ACTIVITY_TYPES.map(type => (
                   <button
                     key={type}
@@ -828,13 +896,7 @@ export default function MonitoringPage() {
                   </button>
                 ))}
               </div>
-              <div style={{ fontSize: '11px', color: '#10b981', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
-                {formType === 'GMM' ? (
-                  <span style={{ color: '#f59e0b' }}>⚠️ GMM memerlukan verifikasi admin</span>
-                ) : (
-                  <>✅ {formType} tidak perlu verifikasi admin — otomatis verified</>
-                )}
-              </div>
+              <div style={{ height: '8px' }} />
             </div>
 
             <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
@@ -843,7 +905,7 @@ export default function MonitoringPage() {
                 <input className="form-input" style={{ background: '#f8fafc', fontWeight: 600 }} value={form.name} readOnly />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                 <div className="form-group">
                   <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>CODE REFERRAL</label>
                   <input className="form-input" value={form.codeReferral} onChange={e => setForm({ ...form, codeReferral: e.target.value })} required />
@@ -886,27 +948,57 @@ export default function MonitoringPage() {
                 </>
               ) : (
                 <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>BOOKING ID ({formType})</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
-                    {form.bookingIds.map((id, idx) => (
-                      <div key={idx} style={{ display: 'flex', gap: '8px' }}>
-                        <input className="form-input" style={{ flex: 1 }} value={id} placeholder={`Booking ID ${idx+1}`} onChange={e => {
-                          const newIds = [...form.bookingIds];
-                          newIds[idx] = e.target.value;
-                          setForm({ ...form, bookingIds: newIds });
-                        }} required={idx === 0} />
-                        {idx === 0 ? (
-                          <button type="button" onClick={() => setForm({ ...form, bookingIds: [...form.bookingIds, ''] })} style={{ width: '40px', height: '40px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', fontSize: '18px', fontWeight: 600, color: '#00abc6' }}> + </button>
-                        ) : (
-                          <button type="button" onClick={() => {
-                            const newIds = [...form.bookingIds];
-                            newIds.splice(idx, 1);
-                            setForm({ ...form, bookingIds: newIds });
-                          }} style={{ width: '40px', height: '40px', borderRadius: '8px', border: '1px solid #fee2e2', background: 'white', cursor: 'pointer', fontSize: '14px', color: '#ef4444' }}> ✕ </button>
-                        )}
-                      </div>
-                    ))}
+                    <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>NO ACCOUNT ({formType})</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                      {form.noAccounts.map((no, idx) => (
+                        <div key={idx} style={{ display: 'flex', gap: '8px' }}>
+                          <input className="form-input" style={{ flex: 1 }} value={no} placeholder={`No Account ${idx+1}`} onChange={e => {
+                            const newNo = [...form.noAccounts];
+                            newNo[idx] = e.target.value;
+                            setForm({ ...form, noAccounts: newNo });
+                          }} required={idx === 0} />
+                          {idx === 0 ? (
+                            <button type="button" onClick={() => setForm({ ...form, noAccounts: [...form.noAccounts, ''] })} style={{ width: '40px', height: '40px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', fontSize: '18px', fontWeight: 600, color: '#00abc6' }}> + </button>
+                          ) : (
+                            <button type="button" onClick={() => {
+                              const newNo = [...form.noAccounts];
+                              newNo.splice(idx, 1);
+                              setForm({ ...form, noAccounts: newNo });
+                            }} style={{ width: '40px', height: '40px', borderRadius: '8px', border: '1px solid #fee2e2', background: 'white', cursor: 'pointer', fontSize: '14px', color: '#ef4444' }}> ✕ </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
+              )}
+
+              {/* Status Section for KSM, KPR, CC (Admin only) */}
+              {editingEntry && isAdmin && (formType === 'KSM' || formType === 'KPR' || formType === 'CC') && (
+                <div className="form-group" style={{ marginTop: '16px' }}>
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>UPDATE STATUS</label>
+                  <select 
+                    className="form-input" 
+                    value={form.status} 
+                    onChange={e => setForm({ ...form, status: e.target.value })}
+                    style={{ marginTop: '4px', cursor: 'pointer' }}
+                  >
+                    {[
+                      "Belum ada Pengajuan",
+                      "Pengajuan Sudah (Tertarik)",
+                      "Pengajuan Sudah (Custom (Tidak Respond), (Tertarik tp Entar, dll))",
+                      "Pengajuan Tidak Tertarik",
+                      "Dalam Proses Pengajuan (Lancar)",
+                      "Dalam Proses Pengajuan (Perlu Ralat / Sendback)",
+                      "Dalam Proses Pengajuan (Ditolak)",
+                      "Pengajuan Diterima",
+                      "Pengajuan Ditolak",
+                      "Pengajuan Cair",
+                      "TAKEOUT",
+                      "Maintain Nasabah"
+                    ].map(st => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
                 </div>
               )}
 

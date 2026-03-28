@@ -20,53 +20,50 @@ export async function GET() {
     const endOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
 
     const [
-      totalTasks, openTasks, inProgressTasks, doneTasks,
-      totalLeads, wonLeads, totalUsers,
-      leadsList,
-      usersList,
-      gmmStats, ksmStats, kprStats, ccStats
+      totalTasks, openTasks, inProgressTasks, doneTasks
     ] = await Promise.all([
       prisma.task.count({ where: isUser ? { assigneeId: userId } : {} }),
       prisma.task.count({ where: { ...(isUser ? { assigneeId: userId } : {}), status: 'OPEN' } }),
       prisma.task.count({ where: { ...(isUser ? { assigneeId: userId } : {}), status: 'IN_PROGRESS' } }),
       prisma.task.count({ where: { ...(isUser ? { assigneeId: userId } : {}), status: 'DONE' } }),
-      
+    ]);
+
+    const [
+      totalLeads, wonLeads, totalUsers
+    ] = await Promise.all([
       prisma.lead.count({ where: baseLeadWhere }),
       prisma.lead.count({ where: { ...baseLeadWhere, status: 'WON' } }),
       prisma.user.count(),
-
-      prisma.lead.findMany({ 
-         where: baseLeadWhere, 
-         select: { status: true, last_activity_at: true, createdAt: true, potential_amount: true, owner_user_id: true } 
-      }),
-      prisma.user.findMany({ select: { id: true, name: true } }),
-      
-      prisma.monitoringActivity.aggregate({
-        where: { activityType: 'GMM', status: 'VERIFIED', createdAt: { gte: startOfMonth, lte: endOfMonth } },
-        _count: true, _sum: { amount: true }
-      }),
-      prisma.monitoringActivity.aggregate({
-        where: { activityType: 'KSM', createdAt: { gte: startOfMonth, lte: endOfMonth } },
-        _count: true, _sum: { amount: true }
-      }),
-      prisma.monitoringActivity.aggregate({
-        where: { activityType: 'KPR', createdAt: { gte: startOfMonth, lte: endOfMonth } },
-        _count: true, _sum: { amount: true }
-      }),
-      prisma.monitoringActivity.aggregate({
-        where: { activityType: 'CC', createdAt: { gte: startOfMonth, lte: endOfMonth } },
-        _count: true, _sum: { amount: true }
-      })
     ]);
 
+    const leadsList = await prisma.lead.findMany({ 
+       where: baseLeadWhere, 
+       select: { status: true, last_activity_at: true, createdAt: true, potential_amount: true, owner_user_id: true } 
+    });
+
+    const usersList = await prisma.user.findMany({ select: { id: true, name: true } });
+
+    // Fetch all relevant activities for the month to sum in-memory (prevents Prisma aggregate P1001 bug with DateTime)
+    const allActivities = await prisma.monitoringActivity.findMany({
+        where: { createdAt: { gte: startOfMonth, lte: endOfMonth } },
+        select: { activityType: true, amount: true, status: true }
+    });
+
+    const gmmArr = allActivities.filter(a => a.activityType === 'GMM' && ['NEW CIF', 'NTB'].includes(a.status));
+    const ksmArr = allActivities.filter(a => a.activityType === 'KSM' && ['Pengajuan Cair', 'Maintain Nasabah'].includes(a.status));
+    const kprArr = allActivities.filter(a => a.activityType === 'KPR' && ['Pengajuan Cair', 'Maintain Nasabah'].includes(a.status));
+    const ccArr = allActivities.filter(a => a.activityType === 'CC' && ['Pengajuan Cair', 'Maintain Nasabah'].includes(a.status));
+
     const activityStats = {
-      GMM: { count: gmmStats._count || 0, amount: Number(gmmStats._sum.amount) || 0 },
-      KSM: { count: ksmStats._count || 0, amount: Number(ksmStats._sum.amount) || 0 },
-      KPR: { count: kprStats._count || 0, amount: Number(kprStats._sum.amount) || 0 },
-      CC: { count: ccStats._count || 0, amount: Number(ccStats._sum.amount) || 0 },
-      totalCount: (gmmStats._count || 0) + (ksmStats._count || 0) + (kprStats._count || 0) + (ccStats._count || 0),
-      totalAmount: (Number(gmmStats._sum.amount) || 0) + (Number(ksmStats._sum.amount) || 0) + (Number(kprStats._sum.amount) || 0) + (Number(ccStats._sum.amount) || 0)
+      GMM: { count: gmmArr.length, amount: gmmArr.reduce((sum: number, a: any) => sum + (a.amount || 0), 0) },
+      KSM: { count: ksmArr.length, amount: ksmArr.reduce((sum: number, a: any) => sum + (a.amount || 0), 0) },
+      KPR: { count: kprArr.length, amount: kprArr.reduce((sum: number, a: any) => sum + (a.amount || 0), 0) },
+      CC: { count: ccArr.length, amount: ccArr.reduce((sum: number, a: any) => sum + (a.amount || 0), 0) },
+      totalCount: allActivities.length,
+      totalAmount: allActivities.reduce((sum: number, a: any) => sum + (a.amount || 0), 0)
     };
+    activityStats.totalCount = activityStats.GMM.count + activityStats.KSM.count + activityStats.KPR.count + activityStats.CC.count;
+    activityStats.totalAmount = activityStats.GMM.amount + activityStats.KSM.amount + activityStats.KPR.amount + activityStats.CC.amount;
 
     let fresh = 0;
     let warning = 0;
@@ -112,6 +109,7 @@ export async function GET() {
       },
     });
   } catch(e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error('Dashboard API Error:', e);
+    return NextResponse.json({ error: e.message || 'Internal server error' }, { status: 500 });
   }
 }
