@@ -42,6 +42,10 @@ function TasksPageContent() {
   const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [priorityFilter, setPriorityFilter] = useState('');
   const [search, setSearch] = useState(initialSearch);
+  const [cifFilter, setCifFilter] = useState<'ALL' | 'WITH_CIF' | 'NO_CIF'>('ALL');
+  const [leadStatusFilter, setLeadStatusFilter] = useState('');
+  const [leadTypeFilter, setLeadTypeFilter] = useState('');
+  const [leadCategoryFilter, setLeadCategoryFilter] = useState('');
   const [page, setPage] = useState(1);
   const pageSize = 10;
 
@@ -151,6 +155,35 @@ function TasksPageContent() {
   const paginatedTasks = filteredTasks.slice((page - 1) * pageSize, page * pageSize);
   const totalPages = Math.ceil(filteredTasks.length / pageSize);
 
+  const leadStatusOptions = [
+    { value: '', label: 'Semua Status' },
+    { value: 'NEW', label: 'New' },
+    { value: 'READY_TO_FOLLOW_UP', label: 'Ready to FU' },
+    { value: 'CONTACTED', label: 'Contacted' },
+    { value: 'IN_DISCUSSION', label: 'In Discussion' },
+    { value: 'WAITING_CUSTOMER', label: 'Waiting Cust' },
+    { value: 'NEED_SUPPORT', label: 'Need Support' },
+    { value: 'WON', label: 'Won (Deal)' },
+    { value: 'LOST', label: 'Lost' },
+    { value: 'DORMANT', label: 'Dormant' },
+    { value: 'CANCELLED', label: 'Cancelled' },
+    { value: 'KICK', label: 'Take out' },
+    { value: 'NEED_FU', label: 'Need FU' },
+  ];
+
+  const leadTypeOptions = [
+    { value: '', label: 'Semua Tipe' },
+    { value: 'INTENSIFICATION', label: 'Intensification' },
+    { value: 'EXTENSIFICATION', label: 'Extensification' },
+    { value: 'BOTTOM_UP', label: 'Bottom Up' },
+  ];
+
+  const leadCategoryOptions = useMemo(() => {
+    const cats = new Set<string>();
+    leads.forEach(l => { if (l.lead_category) cats.add(l.lead_category); });
+    return [{ value: '', label: 'Semua Kategori' }, ...Array.from(cats).sort().map(c => ({ value: c, label: c }))];
+  }, [leads]);
+
   const filteredLeads = useMemo(() => {
     return leads
       .filter(l => {
@@ -160,7 +193,11 @@ function TasksPageContent() {
         const matchSearch = !search ||
           l.lead_name.toLowerCase().includes(search.toLowerCase()) ||
           (l.branch && l.branch.toLowerCase().includes(search.toLowerCase()));
-        return matchSearch && matchStart && matchEnd;
+        const matchCif = cifFilter === 'ALL' || (cifFilter === 'WITH_CIF' ? !!l.cif : !l.cif);
+        const matchStatus = !leadStatusFilter || l.status === leadStatusFilter;
+        const matchType = !leadTypeFilter || l.lead_type === leadTypeFilter;
+        const matchCategory = !leadCategoryFilter || l.lead_category === leadCategoryFilter;
+        return matchSearch && matchStart && matchEnd && matchCif && matchStatus && matchType && matchCategory;
       })
       .sort((a, b) => {
         let valA, valB;
@@ -177,7 +214,7 @@ function TasksPageContent() {
         // Tiebreaker by id for stable ordering
         return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
       });
-  }, [leads, search, leadSortField, leadSortOrder, startDate, endDate]);
+  }, [leads, search, leadSortField, leadSortOrder, startDate, endDate, cifFilter, leadStatusFilter, leadTypeFilter, leadCategoryFilter]);
 
   const paginatedLeads = filteredLeads.slice((leadPage - 1) * leadPageSize, leadPage * leadPageSize);
   const totalLeadPages = Math.ceil(filteredLeads.length / leadPageSize);
@@ -497,26 +534,52 @@ function TasksPageContent() {
 
       {viewMode === 'GROUPED' ? (
         <div className="leads-container" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div className="table-actions" style={{
-            display: 'flex',
-            gap: '12px',
-            marginBottom: '4px',
-            flexWrap: 'wrap',
-            padding: '8px 4px'
-          }}>
-            <div style={{ display: 'flex', gap: '12px', flex: 2, minWidth: '300px' }}>
-              <select className="filter-input" style={{ flex: 1 }} value={leadSortField} onChange={e => { setLeadSortField(e.target.value as any); setLeadPage(1); }}>
-                <option value="createdAt">Filter: Tanggal Ditambahkan</option>
-                <option value="potential_amount">Filter: Nominal Potensi</option>
-              </select>
-              <select className="filter-input" style={{ flex: 1 }} value={leadSortOrder} onChange={e => { setLeadSortOrder(e.target.value as any); setLeadPage(1); }}>
-                <option value="desc">Urutan: Tertinggi / Terbaru</option>
-                <option value="asc">Urutan: Terendah / Terlama</option>
-              </select>
+          <div className="filter-group-modern" style={{ padding: '4px 0', marginBottom: '16px' }}>
+            {/* Sort Controls */}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <div className="filter-item-premium" style={{ minWidth: '220px' }}>
+                <select className="filter-select-premium" value={leadSortField} onChange={e => setLeadSortField(e.target.value as any)}>
+                  <option value="createdAt">Filter: Tanggal Ditambahkan</option>
+                  <option value="potential_amount">Filter: Nominal Potensi</option>
+                </select>
+              </div>
+              <div className="filter-item-premium" style={{ minWidth: '200px' }}>
+                <select className="filter-select-premium" value={leadSortOrder} onChange={e => setLeadSortOrder(e.target.value as any)}>
+                  <option value="desc">Urutan: Tertinggi / Terbaru</option>
+                  <option value="asc">Urutan: Terendah / Terlama</option>
+                </select>
+              </div>
             </div>
-            <div style={{ position: 'relative', flex: 3, minWidth: '300px' }}>
-              <input className="search-input" placeholder="Cari nama lead atau cabang..." value={search} onChange={e => { setSearch(e.target.value); setLeadPage(1); }} style={{ width: '100%', paddingLeft: '40px' }} />
-              <span style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', fontSize: '18px', opacity: 0.5 }}></span>
+
+            {/* Categorical Filters */}
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <div className="filter-item-premium">
+                <select className="filter-select-premium" value={leadStatusFilter} onChange={e => { setLeadStatusFilter(e.target.value); setLeadPage(1); }}>
+                  {[{ value: '', label: 'Semua Status' }, ...leadStatusOptions.slice(1)].map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+              </div>
+              <div className="filter-item-premium">
+                <select className="filter-select-premium" value={leadTypeFilter} onChange={e => { setLeadTypeFilter(e.target.value); setLeadPage(1); }}>
+                  {[{ value: '', label: 'Semua Tipe' }, ...leadTypeOptions.slice(1)].map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+              </div>
+              <div className="filter-item-premium">
+                <select className="filter-select-premium" value={leadCategoryFilter} onChange={e => { setLeadCategoryFilter(e.target.value); setLeadPage(1); }}>
+                  {leadCategoryOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {/* CIF Toggle */}
+            <div className="cif-toggle-container-premium">
+              <button className={`cif-toggle-btn-premium ${cifFilter === 'ALL' ? 'active' : ''}`} onClick={() => { setCifFilter('ALL'); setLeadPage(1); }}>All</button>
+              <button className={`cif-toggle-btn-premium ${cifFilter === 'WITH_CIF' ? 'active' : ''}`} onClick={() => { setCifFilter('WITH_CIF'); setLeadPage(1); }}>CIF</button>
+              <button className={`cif-toggle-btn-premium ${cifFilter === 'NO_CIF' ? 'active' : ''}`} onClick={() => { setCifFilter('NO_CIF'); setLeadPage(1); }}>Non-CIF</button>
+            </div>
+
+            {/* Search Bar */}
+            <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+              <input className="search-input" placeholder="Cari nama lead atau cabang..." value={search} onChange={e => { setSearch(e.target.value); setLeadPage(1); }} style={{ width: '100%', height: '36px', borderRadius: '8px', fontSize: '13px' }} />
             </div>
           </div>
           {paginatedLeads.map(lead => {
@@ -540,11 +603,53 @@ function TasksPageContent() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)' }}>
                       {lead.lead_name}
-                      <span className="status-badge" style={{ fontSize: '11px', background: 'var(--accent-blue-light)', color: 'var(--accent-blue)' }}>{lead.status.replace(/_/g, ' ')}</span>
-                      <span className="priority-badge priority-critical" style={{ fontSize: '10px' }}>{lead.lead_type.replace(/_/g, ' ')}</span>
+                      <span className="lead-tag-badge status-ready" style={{ 
+                        fontSize: '11px', 
+                        padding: '4px 10px',
+                        borderRadius: '8px',
+                        fontWeight: 800,
+                        background: lead.status === 'READY_TO_FOLLOW_UP' ? '#ebf5ff' : 'var(--accent-blue-light)', 
+                        color: lead.status === 'READY_TO_FOLLOW_UP' ? '#2563eb' : 'var(--accent-blue)',
+                        border: lead.status === 'READY_TO_FOLLOW_UP' ? '1px solid #dbeafe' : 'none',
+                        textTransform: 'uppercase'
+                      }}>
+                        {lead.status.replace(/_/g, ' ')}
+                      </span>
+                      
+                      <span className="lead-tag-badge type-intensification" style={{ 
+                        fontSize: '11px', 
+                        padding: '4px 10px',
+                        borderRadius: '8px',
+                        fontWeight: 800,
+                        background: lead.lead_type === 'INTENSIFICATION' ? '#fff1f2' : (lead.lead_type === 'EXTENSIFICATION' ? '#f0fdf4' : '#fef9c3'), 
+                        color: lead.lead_type === 'INTENSIFICATION' ? '#e11d48' : (lead.lead_type === 'EXTENSIFICATION' ? '#16a34a' : '#a16207'),
+                        border: lead.lead_type === 'INTENSIFICATION' ? '1px solid #ffe4e6' : (lead.lead_type === 'EXTENSIFICATION' ? '1px solid #dcfce7' : '1px solid #fef08a'),
+                        textTransform: 'uppercase'
+                      }}>
+                        {lead.lead_type.replace(/_/g, ' ')}
+                      </span>
+
                       {lead.lead_category && (
-                        <span className="priority-badge priority-medium" style={{ fontSize: '10px', background: 'var(--bg-card)', border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}>
+                        <span className="lead-tag-badge category-everhigh" style={{ 
+                          fontSize: '11px', 
+                          padding: '4px 10px',
+                          borderRadius: '8px',
+                          fontWeight: 800,
+                          background: '#f8fafc',
+                          color: '#64748b',
+                          border: '1px solid #e2e8f0',
+                          textTransform: 'uppercase'
+                        }}>
                           {lead.lead_category}
+                        </span>
+                      )}
+                      {lead.cif ? (
+                        <span className="status-badge" style={{ fontSize: '11px', background: 'var(--accent-green-light)', color: 'var(--accent-green)', fontWeight: 700 }}>
+                          CIF: {lead.cif}
+                        </span>
+                      ) : (
+                        <span className="status-badge" style={{ fontSize: '11px', background: 'var(--accent-red-light)', color: 'var(--accent-red)', fontWeight: 700 }}>
+                          Non-CIF
                         </span>
                       )}
                     </div>
