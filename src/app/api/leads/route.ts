@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
+import { sendWhatsAppNotification } from '@/lib/whatsapp';
 
 // GET all leads
 export async function GET(request: Request) {
@@ -93,6 +94,15 @@ export async function PATCH(request: Request) {
       data: updateData,
       include: { owner: { select: { name: true } } }
     });
+
+    if (owner_user_id && lead.owner_user_id === owner_user_id && owner_user_id !== session.userId) {
+      const owner = await (prisma as any).user.findUnique({ where: { id: owner_user_id }, select: { name: true, whatsapp: true } });
+      if (owner?.whatsapp) {
+        const message = `Halo ${owner.name}, Anda telah di-assign sebagai pemilik data Lead baru: ${lead.lead_name}. Silakan cek pada website TheLeads.
+https://branch-x.vercel.app/`;
+        await sendWhatsAppNotification(owner.whatsapp, message);
+      }
+    }
 
     return NextResponse.json({ lead });
   } catch (err: any) {

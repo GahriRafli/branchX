@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { sendWhatsAppNotification } from '@/lib/whatsapp';
 
 export async function POST(request: Request) {
   try {
@@ -81,6 +82,30 @@ export async function POST(request: Request) {
        maxWait: 15000,
        timeout: 60000 
     });
+
+    // Send summary notifications via WhatsApp for bulk assignments
+    try {
+      // Find all unique owners from the valid leads
+      const ownerIds = [...new Set(validLeadsToInsert.map(l => l.matchedUserId).filter(id => !!id))];
+      
+      if (ownerIds.length > 0) {
+        const users = await (prisma as any).user.findMany({
+          where: { id: { in: ownerIds } },
+          select: { id: true, name: true, whatsapp: true }
+        });
+
+        for (const user of users) {
+          if (user.whatsapp) {
+            const count = validLeadsToInsert.filter(l => l.matchedUserId === user.id).length;
+            const message = `Halo ${user.name}, Anda telah di-assign sebagai pemilik data Lead baru sebanyak: ${count} Lead. Silakan cek pada website TheLeads.
+https://branch-x.vercel.app/`;
+            await sendWhatsAppNotification(user.whatsapp, message);
+          }
+        }
+      }
+    } catch (waErr) {
+      console.error('Bulk WhatsApp Notification Error:', waErr);
+    }
 
     return NextResponse.json({ 
        message: `Successfully imported ${createdCount} new Leads and automatically generated their follow-up Tasks!` 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
+import { sendWhatsAppNotification } from '@/lib/whatsapp';
 
 // GET all tasks (admin sees all, user sees only assigned)
 export async function GET() {
@@ -68,6 +69,16 @@ export async function POST(request: Request) {
       },
       include: { assignee: { select: { id: true, name: true, nip: true } } },
     });
+
+    if (task.assigneeId && task.assigneeId !== session.userId) {
+      const assignee = await (prisma as any).user.findUnique({ where: { id: task.assigneeId }, select: { name: true, whatsapp: true } });
+      if (assignee?.whatsapp) {
+        const leadName = leadId ? (await (prisma as any).lead.findUnique({ where: { id: leadId }, select: { lead_name: true } }))?.lead_name || '' : '';
+        const message = `Halo ${assignee.name}, Anda telah di-assign ke task: ${title}${leadName ? ` untuk Lead: ${leadName}` : ''}. Silakan cek website TheLeads.
+https://branch-x.vercel.app/`;
+        await sendWhatsAppNotification(assignee.whatsapp, message);
+      }
+    }
 
     return NextResponse.json({ task }, { status: 201 });
   } catch (err: any) {
@@ -161,6 +172,16 @@ export async function PATCH(request: Request) {
             isRead: false
           }))
         });
+      }
+    }
+
+    if (assigneeId && task.assigneeId === assigneeId && task.assigneeId !== session.userId) {
+      const assignee = await (prisma as any).user.findUnique({ where: { id: assigneeId }, select: { name: true, whatsapp: true } });
+      if (assignee?.whatsapp) {
+        const leadName = task.leadId ? (await (prisma as any).lead.findUnique({ where: { id: task.leadId }, select: { lead_name: true } }))?.lead_name || '' : '';
+        const message = `Halo ${assignee.name}, Anda telah di-assign ke task: ${task.title}${leadName ? ` untuk Lead: ${leadName}` : ''}. Silakan cek website TheLeads.
+https://branch-x.vercel.app/`;
+        await sendWhatsAppNotification(assignee.whatsapp, message);
       }
     }
 

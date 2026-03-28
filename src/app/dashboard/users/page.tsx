@@ -10,6 +10,7 @@ interface UserListItem {
   nip: string;
   role: string;
   can_access_monitoring: boolean;
+  whatsapp: string | null;
 }
 
 export default function UsersPage() {
@@ -19,7 +20,7 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserListItem | null>(null);
-  const [userForm, setUserForm] = useState({ name: '', nip: '', password: '', role: 'USER', can_access_monitoring: false });
+  const [userForm, setUserForm] = useState({ name: '', nip: '', password: '', role: 'USER', can_access_monitoring: false, whatsapp: '' });
   const [error, setError] = useState('');
 
   const [showConfirmModal, setShowConfirmModal] = useState<{
@@ -118,7 +119,7 @@ export default function UsersPage() {
         </div>
         <button id="tour-users-add" className="btn btn-primary btn-sm" style={{ width: 'auto' }} onClick={() => {
           setEditingUser(null);
-          setUserForm({ name: '', nip: '', password: '', role: 'USER', can_access_monitoring: false });
+          setUserForm({ name: '', nip: '', password: '', role: 'USER', can_access_monitoring: false, whatsapp: '' });
           setShowUserModal(true);
         }}>Add User</button>
       </div>
@@ -126,13 +127,14 @@ export default function UsersPage() {
       <div className="table-container" id="tour-users-table">
         <table className="data-table">
           <thead>
-            <tr><th>Name</th><th>NIP</th><th>Role</th><th>Monitoring</th><th>Actions</th></tr>
+            <tr><th>Name</th><th>NIP</th><th>WhatsApp</th><th>Role</th><th>Monitoring</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {users.map(u => (
               <tr key={u.id}>
                 <td style={{ fontWeight: 500 }}>{u.name}</td>
                 <td>{u.nip}</td>
+                <td style={{ fontSize: '12px' }}>{u.whatsapp || '-'}</td>
                 <td><span className={`status-badge ${u.role === 'ADMIN' ? 'status-in-progress' : 'status-todo'}`}>{u.role}</span></td>
                 <td>
                   <span className={`status-badge ${u.can_access_monitoring || u.role === 'ADMIN' ? 'status-done' : 'status-blocker'}`}>
@@ -143,7 +145,7 @@ export default function UsersPage() {
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button className="btn btn-secondary btn-sm" onClick={() => {
                         setEditingUser(u);
-                        setUserForm({ name: u.name, nip: u.nip, role: u.role, password: '', can_access_monitoring: u.can_access_monitoring });
+                        setUserForm({ name: u.name, nip: u.nip, role: u.role, password: '', can_access_monitoring: u.can_access_monitoring, whatsapp: u.whatsapp || '' });
                         setShowUserModal(true);
                     }}>Edit</button>
                     {u.id !== currentUser?.id && <button className="btn btn-danger btn-sm" onClick={() => handleDeleteUser(u.id)}>Delete</button>}
@@ -168,6 +170,10 @@ export default function UsersPage() {
               <div className="form-group">
                 <label>NIP</label>
                 <input className="form-input" inputMode="numeric" pattern="[0-9]*" value={userForm.nip} onChange={e => setUserForm({...userForm, nip: e.target.value.replace(/\D/g, '')})} required />
+              </div>
+              <div className="form-group">
+                <label>WhatsApp Number (e.g. 628123456789)</label>
+                <input className="form-input" inputMode="tel" value={userForm.whatsapp} onChange={e => setUserForm({...userForm, whatsapp: e.target.value})} placeholder="628..." />
               </div>
               <div className="form-group">
                 <label>Password {editingUser && '(Leave blank to keep current)'}</label>

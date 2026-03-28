@@ -18,6 +18,7 @@ export async function GET() {
         nip: true,
         role: true,
         can_access_monitoring: true,
+        whatsapp: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { name, nip, password, role, can_access_monitoring } = await request.json();
+    const { name, nip, password, role, can_access_monitoring, whatsapp } = await request.json();
 
     if (!name || !nip || !password) {
       return NextResponse.json(
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
         password: hashedPassword,
         role: role || 'USER',
         can_access_monitoring: !!can_access_monitoring,
+        whatsapp: whatsapp || null,
       },
       select: {
         id: true,
@@ -75,6 +77,7 @@ export async function POST(request: Request) {
         nip: true,
         role: true,
         can_access_monitoring: true,
+        whatsapp: true,
       },
     });
 
@@ -93,7 +96,7 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { id, name, nip, role, password, can_access_monitoring } = await request.json();
+    const { id, name, nip, role, password, can_access_monitoring, whatsapp } = await request.json();
 
     if (!id) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
@@ -110,6 +113,7 @@ export async function PATCH(request: Request) {
     if (role) updateData.role = role === 'ADMIN' ? 'ADMIN' : 'USER';
     if (password) updateData.password = await bcrypt.hash(password, 12);
     if (can_access_monitoring !== undefined) updateData.can_access_monitoring = !!can_access_monitoring;
+    if (whatsapp !== undefined) updateData.whatsapp = whatsapp;
 
     const user = await (prisma as any).user.update({
       where: { id },
@@ -120,6 +124,7 @@ export async function PATCH(request: Request) {
         nip: true,
         role: true,
         can_access_monitoring: true,
+        whatsapp: true,
       },
     });
 
