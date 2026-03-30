@@ -491,7 +491,7 @@ export default function MonitoringPage() {
         </div>
       </div>
 
-      <div className="tabs-container" style={{ marginBottom: '24px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+      <div className="tabs-container" id="tour-mon-tabs" style={{ marginBottom: '24px', display: 'flex', gap: '12px', alignItems: 'center' }}>
         <div style={{ display: 'flex', gap: '12px', flex: 1 }}>
           {ACTIVITY_TYPES.map(type => (
             <button
@@ -552,6 +552,7 @@ export default function MonitoringPage() {
                 });
                 setShowModal(true);
               }}
+              id="tour-mon-add"
               style={{ padding: '4px', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '18px' }}
             >
               ➕
@@ -569,7 +570,7 @@ export default function MonitoringPage() {
           </div>
         </div>
 
-        <div className="table-container" style={{ margin: 0, border: 'none', overflowX: 'auto' }}>
+        <div className="table-container" id="tour-mon-table" style={{ margin: 0, border: 'none', overflowX: 'auto' }}>
           <table className="data-table">
             <thead>
               <tr style={{ background: '#f8fafc' }}>

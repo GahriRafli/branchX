@@ -1666,3 +1666,74 @@ html, body {
     display: block !important;
   }
 }
+
+/* ===== PREMIUM TOUR POPOVER (driver.js) ===== */
+.premium-tour-popover {
+  background: var(--bg-card) !important;
+  border-radius: 16px !important;
+  border: 1px solid var(--border-subtle) !important;
+  box-shadow: var(--shadow-xl) !important;
+  padding: 24px !important;
+  max-width: 380px !important;
+}
+
+.premium-tour-popover .driver-popover-title {
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  color: var(--text-primary) !important;
+  margin-bottom: 12px !important;
+  font-family: 'Inter', sans-serif !important;
+}
+
+.premium-tour-popover .driver-popover-description {
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+  color: var(--text-secondary) !important;
+  margin-bottom: 20px !important;
+}
+
+.premium-tour-popover .driver-popover-progress-text {
+  color: var(--text-tertiary) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+.premium-tour-popover .driver-popover-arrow {
+  border-color: var(--bg-card) !important;
+}
+
+.premium-tour-popover .driver-popover-footer {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  margin-top: 24px !important;
+}
+
+.premium-tour-popover button {
+  padding: 8px 16px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  transition: all 0.2s !important;
+  text-shadow: none !important;
+}
+
+.premium-tour-popover .driver-popover-next-btn {
+  background: var(--accent-blue) !important;
+  color: white !important;
+  border: none !important;
+}
+
+.premium-tour-popover .driver-popover-next-btn:hover {
+  background: var(--accent-blue-hover) !important;
+}
+
+.premium-tour-popover .driver-popover-prev-btn {
+  background: #f4f5f7 !important;
+  color: var(--text-secondary) !important;
+  border: 1px solid var(--border-subtle) !important;
+}
+
+.premium-tour-popover .driver-popover-close-btn {
+  color: var(--text-tertiary) !important;
+}

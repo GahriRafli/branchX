@@ -3,6 +3,8 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { useTutorial } from '@/hooks/useTutorial';
+import 'driver.js/dist/driver.css';
 
 interface User {
   id: string;
@@ -100,6 +102,8 @@ export default function DashboardLayout({
   }, [pathname]);
 
   const isAdmin = user?.role === 'ADMIN';
+
+  const { startTutorial } = useTutorial(user, isAdmin);
 
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -265,6 +269,25 @@ export default function DashboardLayout({
                 </Link>
               </>
             )}
+
+            {/* Help Center Section */}
+            <div className="sidebar-group-label" style={{ padding: '16px 16px 4px', fontSize: '11px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pusat Bantuan</div>
+            <button 
+              onClick={() => startTutorial()}
+              className="sidebar-link active" 
+              style={{ 
+                margin: '4px 12px',
+                width: 'calc(100% - 24px)',
+                background: 'rgba(0, 82, 204, 0.08)',
+                color: 'var(--accent-blue)',
+                border: '1px solid rgba(0, 82, 204, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}
+            >
+              <span className="icon">❓</span> Panduan Halaman
+            </button>
           </nav>
           <div className="sidebar-footer">
             <div className="sidebar-user">
