@@ -20,47 +20,40 @@ export async function GET() {
     const endOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
 
     const [
-      totalTasks, openTasks, inProgressTasks, doneTasks
+      totalTasks, openTasks, inProgressTasks, doneTasks,
+      totalLeads, wonLeads, totalUsers,
+      leadsList, usersList, allActivities
     ] = await Promise.all([
       prisma.task.count({ where: isUser ? { assigneeId: userId } : {} }),
       prisma.task.count({ where: { ...(isUser ? { assigneeId: userId } : {}), status: 'OPEN' } }),
       prisma.task.count({ where: { ...(isUser ? { assigneeId: userId } : {}), status: 'IN_PROGRESS' } }),
       prisma.task.count({ where: { ...(isUser ? { assigneeId: userId } : {}), status: 'DONE' } }),
-    ]);
-
-    const [
-      totalLeads, wonLeads, totalUsers
-    ] = await Promise.all([
       prisma.lead.count({ where: baseLeadWhere }),
       prisma.lead.count({ where: { ...baseLeadWhere, status: 'WON' } }),
       prisma.user.count(),
+      prisma.lead.findMany({ 
+         where: baseLeadWhere, 
+         select: { status: true, last_activity_at: true, createdAt: true, potential_amount: true, owner_user_id: true } 
+      }),
+      prisma.user.findMany({ select: { id: true, name: true } }),
+      prisma.monitoringActivity.findMany({
+          where: { createdAt: { gte: startOfMonth, lte: endOfMonth } },
+          select: { activityType: true, amount: true, status: true }
+      })
     ]);
 
-    const leadsList = await prisma.lead.findMany({ 
-       where: baseLeadWhere, 
-       select: { status: true, last_activity_at: true, createdAt: true, potential_amount: true, owner_user_id: true } 
-    });
-
-    const usersList = await prisma.user.findMany({ select: { id: true, name: true } });
-
-    // Fetch all relevant activities for the month to sum in-memory (prevents Prisma aggregate P1001 bug with DateTime)
-    const allActivities = await prisma.monitoringActivity.findMany({
-        where: { createdAt: { gte: startOfMonth, lte: endOfMonth } },
-        select: { activityType: true, amount: true, status: true }
-    });
-
-    const gmmArr = allActivities.filter(a => a.activityType === 'GMM' && ['NEW CIF', 'NTB'].includes(a.status));
-    const ksmArr = allActivities.filter(a => a.activityType === 'KSM' && ['Pengajuan Cair', 'Maintain Nasabah'].includes(a.status));
-    const kprArr = allActivities.filter(a => a.activityType === 'KPR' && ['Pengajuan Cair', 'Maintain Nasabah'].includes(a.status));
-    const ccArr = allActivities.filter(a => a.activityType === 'CC' && ['Pengajuan Cair', 'Maintain Nasabah'].includes(a.status));
+    const gmmArr = allActivities.filter((a: any) => a.activityType === 'GMM' && ['NEW CIF', 'NTB'].includes(a.status));
+    const ksmArr = allActivities.filter((a: any) => a.activityType === 'KSM' && ['Pengajuan Cair', 'Maintain Nasabah'].includes(a.status));
+    const kprArr = allActivities.filter((a: any) => a.activityType === 'KPR' && ['Pengajuan Cair', 'Maintain Nasabah'].includes(a.status));
+    const ccArr = allActivities.filter((a: any) => a.activityType === 'CC' && ['Pengajuan Cair', 'Maintain Nasabah'].includes(a.status));
 
     const activityStats = {
       GMM: { count: gmmArr.length, amount: gmmArr.reduce((sum: number, a: any) => sum + (a.amount || 0), 0) },
       KSM: { count: ksmArr.length, amount: ksmArr.reduce((sum: number, a: any) => sum + (a.amount || 0), 0) },
       KPR: { count: kprArr.length, amount: kprArr.reduce((sum: number, a: any) => sum + (a.amount || 0), 0) },
       CC: { count: ccArr.length, amount: ccArr.reduce((sum: number, a: any) => sum + (a.amount || 0), 0) },
-      totalCount: allActivities.length,
-      totalAmount: allActivities.reduce((sum: number, a: any) => sum + (a.amount || 0), 0)
+      totalCount: 0,
+      totalAmount: 0
     };
     activityStats.totalCount = activityStats.GMM.count + activityStats.KSM.count + activityStats.KPR.count + activityStats.CC.count;
     activityStats.totalAmount = activityStats.GMM.amount + activityStats.KSM.amount + activityStats.KPR.amount + activityStats.CC.amount;
