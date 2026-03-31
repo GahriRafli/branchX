@@ -51,12 +51,15 @@ export async function GET(request: Request) {
       }
     });
 
-    // 4. Build leaderboard with all users
+    // 4. Build leaderboard with only active winners (count > 0)
     const leaderboard = users.map(u => ({
       name: u.name,
-      codeReferral: u.nip, // Use NIP as fallback for referral if it matches your schema logic
+      codeReferral: u.nip, 
       count: activityCounts[u.id] || 0
-    })).sort((a, b) => b.count - a.count).slice(0, 10);
+    }))
+    .filter(entry => entry.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
 
     return NextResponse.json({ leaderboard });
   } catch (err: any) {
