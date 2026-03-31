@@ -464,7 +464,7 @@ function TasksPageContent() {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
           <h1 className="page-title" style={{ fontSize: '28px', fontWeight: 800, background: 'linear-gradient(135deg, var(--text-primary), #64748b)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            {isAdmin ? 'All CRM Framework' : 'My Follow-Ups'}
+            {isAdmin ? 'All Task Leads' : 'My Follow-Ups'}
           </h1>
           <p className="page-subtitle" style={{ fontSize: '14px', marginTop: '4px' }}>
             {viewMode === 'FLAT' ? `${filteredTasks.length} tasks found` : `${filteredLeads.length} leads found`}
@@ -603,25 +603,25 @@ function TasksPageContent() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <div style={{ fontSize: '18px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)' }}>
                       {lead.lead_name}
-                      <span className="lead-tag-badge status-ready" style={{ 
-                        fontSize: '11px', 
+                      <span className="lead-tag-badge status-ready" style={{
+                        fontSize: '11px',
                         padding: '4px 10px',
                         borderRadius: '8px',
                         fontWeight: 800,
-                        background: lead.status === 'READY_TO_FOLLOW_UP' ? '#ebf5ff' : 'var(--accent-blue-light)', 
+                        background: lead.status === 'READY_TO_FOLLOW_UP' ? '#ebf5ff' : 'var(--accent-blue-light)',
                         color: lead.status === 'READY_TO_FOLLOW_UP' ? '#2563eb' : 'var(--accent-blue)',
                         border: lead.status === 'READY_TO_FOLLOW_UP' ? '1px solid #dbeafe' : 'none',
                         textTransform: 'uppercase'
                       }}>
                         {lead.status.replace(/_/g, ' ')}
                       </span>
-                      
-                      <span className="lead-tag-badge type-intensification" style={{ 
-                        fontSize: '11px', 
+
+                      <span className="lead-tag-badge type-intensification" style={{
+                        fontSize: '11px',
                         padding: '4px 10px',
                         borderRadius: '8px',
                         fontWeight: 800,
-                        background: lead.lead_type === 'INTENSIFICATION' ? '#fff1f2' : (lead.lead_type === 'EXTENSIFICATION' ? '#f0fdf4' : '#fef9c3'), 
+                        background: lead.lead_type === 'INTENSIFICATION' ? '#fff1f2' : (lead.lead_type === 'EXTENSIFICATION' ? '#f0fdf4' : '#fef9c3'),
                         color: lead.lead_type === 'INTENSIFICATION' ? '#e11d48' : (lead.lead_type === 'EXTENSIFICATION' ? '#16a34a' : '#a16207'),
                         border: lead.lead_type === 'INTENSIFICATION' ? '1px solid #ffe4e6' : (lead.lead_type === 'EXTENSIFICATION' ? '1px solid #dcfce7' : '1px solid #fef08a'),
                         textTransform: 'uppercase'
@@ -630,8 +630,8 @@ function TasksPageContent() {
                       </span>
 
                       {lead.lead_category && (
-                        <span className="lead-tag-badge category-everhigh" style={{ 
-                          fontSize: '11px', 
+                        <span className="lead-tag-badge category-everhigh" style={{
+                          fontSize: '11px',
                           padding: '4px 10px',
                           borderRadius: '8px',
                           fontWeight: 800,
@@ -669,10 +669,10 @@ function TasksPageContent() {
                     <button className="btn btn-secondary btn-sm" onClick={(e) => {
                       e.stopPropagation();
                       setEditingLead(lead);
-                      setLeadForm({ 
-                        status: lead.status, 
-                        priority: lead.priority, 
-                        owner_user_id: lead.owner_user_id || '', 
+                      setLeadForm({
+                        status: lead.status,
+                        priority: lead.priority,
+                        owner_user_id: lead.owner_user_id || '',
                         support_needed: lead.support_needed || '',
                         keterangan: lead.keterangan || ''
                       });
@@ -688,13 +688,13 @@ function TasksPageContent() {
                       <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>Activity & Sub-tasks</h4>
                       <button className="btn btn-primary btn-sm" onClick={() => {
                         setEditingTask(null);
-                        setTaskForm({ 
-                          title: '', 
-                          description: '', 
-                          priority: 'MEDIUM', 
-                          status: 'OPEN', 
-                          assigneeId: isAdmin ? (lead.owner_user_id || '') : (user?.id || ''), 
-                          leadId: lead.id 
+                        setTaskForm({
+                          title: '',
+                          description: '',
+                          priority: 'MEDIUM',
+                          status: 'OPEN',
+                          assigneeId: isAdmin ? (lead.owner_user_id || '') : (user?.id || ''),
+                          leadId: lead.id
                         });
                         setShowTaskModal(true);
                       }}>+ Add Follow Up Task</button>
@@ -1036,7 +1036,7 @@ function TasksPageContent() {
               <div className="form-group">
                 <label>Lead Status</label>
                 <select className="form-select" value={leadForm.status} onChange={e => setLeadForm({ ...leadForm, status: e.target.value })}>
-                   <option value="NEW">New</option>
+                  <option value="NEW">New</option>
                   <option value="READY_TO_FOLLOW_UP">Ready to Follow Up</option>
                   <option value="CONTACTED">Contacted</option>
                   <option value="IN_DISCUSSION">In Discussion</option>
@@ -1054,12 +1054,12 @@ function TasksPageContent() {
               {(['CANCELLED', 'KICK', 'LOST', 'NEED_FU'].includes(leadForm.status)) && (
                 <div className="form-group">
                   <label>Keterangan</label>
-                  <textarea 
-                    className="form-input" 
-                    placeholder="Masukkan keterangan (wajib untuk status ini)..." 
-                    value={leadForm.keterangan} 
+                  <textarea
+                    className="form-input"
+                    placeholder="Masukkan keterangan (wajib untuk status ini)..."
+                    value={leadForm.keterangan}
                     onChange={e => setLeadForm({ ...leadForm, keterangan: e.target.value })}
-                    required 
+                    required
                   />
                 </div>
               )}

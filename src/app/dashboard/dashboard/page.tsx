@@ -79,7 +79,7 @@ export default function DashboardMainPage() {
       ]);
       const statsData = await statsRes.json();
       const tasksData = await tasksRes.json();
-      
+
       if (statsData.stats) setStats(statsData.stats);
       if (tasksData.tasks) setTasks(tasksData.tasks);
     } finally {
@@ -147,7 +147,7 @@ export default function DashboardMainPage() {
     <>
       <div className="page-header">
         <div>
-          <h1 className="page-title">CRM Dashboard</h1>
+          <h1 className="page-title">The Leads Dashboard</h1>
           <p className="page-subtitle">Monitor pipeline performance and follow-up activities</p>
         </div>
       </div>
@@ -177,32 +177,32 @@ export default function DashboardMainPage() {
 
       <div style={{ marginTop: '24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
         <div className="card" onClick={() => router.push('/dashboard/monitoring?tab=GMM')} style={{ cursor: 'pointer', padding: '16px', borderLeft: `4px solid ${TAB_COLORS.GMM}`, background: 'var(--bg-card)' }}>
-           <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>GMM SUMMARY ({currentMonthName})</div>
-           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
-              <div style={{ fontSize: '24px', fontWeight: 700 }}>{stats.activityStats.GMM.count} <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text-tertiary)' }}>Entries</span></div>
-              <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Amount: {formatAmount(stats.activityStats.GMM.amount)}</div>
-           </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>GMM SUMMARY ({currentMonthName})</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
+            <div style={{ fontSize: '24px', fontWeight: 700 }}>{stats.activityStats.GMM.count} <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text-tertiary)' }}>Entries</span></div>
+            <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Amount: {formatAmount(stats.activityStats.GMM.amount)}</div>
+          </div>
         </div>
         <div className="card" onClick={() => router.push('/dashboard/monitoring?tab=KSM')} style={{ cursor: 'pointer', padding: '16px', borderLeft: `4px solid ${TAB_COLORS.KSM}`, background: 'var(--bg-card)' }}>
-           <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>KSM SUMMARY ({currentMonthName})</div>
-           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
-              <div style={{ fontSize: '24px', fontWeight: 700 }}>{stats.activityStats.KSM.count} <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text-tertiary)' }}>Entries</span></div>
-              <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Amount: {formatAmount(stats.activityStats.KSM.amount)}</div>
-           </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>KSM SUMMARY ({currentMonthName})</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
+            <div style={{ fontSize: '24px', fontWeight: 700 }}>{stats.activityStats.KSM.count} <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text-tertiary)' }}>Entries</span></div>
+            <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Amount: {formatAmount(stats.activityStats.KSM.amount)}</div>
+          </div>
         </div>
         <div className="card" onClick={() => router.push('/dashboard/monitoring?tab=KPR')} style={{ cursor: 'pointer', padding: '16px', borderLeft: `4px solid ${TAB_COLORS.KPR}`, background: 'var(--bg-card)' }}>
-           <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>KPR SUMMARY ({currentMonthName})</div>
-           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
-              <div style={{ fontSize: '24px', fontWeight: 700 }}>{stats.activityStats.KPR.count} <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text-tertiary)' }}>Entries</span></div>
-              <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Amount: {formatAmount(stats.activityStats.KPR.amount)}</div>
-           </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>KPR SUMMARY ({currentMonthName})</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
+            <div style={{ fontSize: '24px', fontWeight: 700 }}>{stats.activityStats.KPR.count} <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text-tertiary)' }}>Entries</span></div>
+            <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Amount: {formatAmount(stats.activityStats.KPR.amount)}</div>
+          </div>
         </div>
         <div className="card" onClick={() => router.push('/dashboard/monitoring?tab=CC')} style={{ cursor: 'pointer', padding: '16px', borderLeft: `4px solid ${TAB_COLORS.CC}`, background: 'var(--bg-card)' }}>
-           <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>CC SUMMARY ({currentMonthName})</div>
-           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
-              <div style={{ fontSize: '24px', fontWeight: 700 }}>{stats.activityStats.CC?.count || 0} <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text-tertiary)' }}>Entries</span></div>
-              <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Amount: {formatAmount(stats.activityStats.CC?.amount || 0)}</div>
-           </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>CC SUMMARY ({currentMonthName})</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '8px' }}>
+            <div style={{ fontSize: '24px', fontWeight: 700 }}>{stats.activityStats.CC?.count || 0} <span style={{ fontSize: '14px', fontWeight: 400, color: 'var(--text-tertiary)' }}>Entries</span></div>
+            <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Amount: {formatAmount(stats.activityStats.CC?.amount || 0)}</div>
+          </div>
         </div>
       </div>
 
@@ -236,9 +236,9 @@ export default function DashboardMainPage() {
             <BarChart data={activityChartData} margin={{ top: 20, right: 0, left: -20, bottom: 0 }}>
               <XAxis dataKey="name" tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: 'var(--text-tertiary)', fontSize: 12 }} axisLine={false} tickLine={false} tickFormatter={(value) => formatAmount(value)} />
-              <Tooltip 
+              <Tooltip
                 formatter={(value: any) => [formatAmount(value), 'Total Amount']}
-                contentStyle={{ background: 'var(--bg-popover)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-primary)' }} 
+                contentStyle={{ background: 'var(--bg-popover)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-primary)' }}
               />
               <Bar dataKey="amount" radius={[6, 6, 0, 0]} maxBarSize={60}>
                 {activityChartData.map((entry, index) => (
@@ -251,26 +251,26 @@ export default function DashboardMainPage() {
 
 
         {isAdmin ? (
-           <div className="chart-card" style={{ background: 'var(--bg-card)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
-              <div className="chart-title" style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Top Performers</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                 {stats.leaderboard.length === 0 ? (
-                    <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '32px 0' }}>No closed deals yet.</div>
-                 ) : (
-                    stats.leaderboard.map((user, i) => (
-                       <div key={user.id} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: i === 0 ? 'var(--accent-orange-light)' : 'var(--bg-main)', color: i === 0 ? 'var(--accent-orange)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700 }}>
-                             #{i + 1}
-                          </div>
-                          <div style={{ flex: 1 }}>
-                             <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{user.name}</div>
-                             <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{user.wonCount} Won • {new Intl.NumberFormat('id-ID', { notation: 'compact' }).format(user.pipelineAmount)} Pipeline</div>
-                          </div>
-                       </div>
-                    ))
-                 )}
-              </div>
-           </div>
+          <div className="chart-card" style={{ background: 'var(--bg-card)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
+            <div className="chart-title" style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Top Performers</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {stats.leaderboard.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '32px 0' }}>No closed deals yet.</div>
+              ) : (
+                stats.leaderboard.map((user, i) => (
+                  <div key={user.id} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: i === 0 ? 'var(--accent-orange-light)' : 'var(--bg-main)', color: i === 0 ? 'var(--accent-orange)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700 }}>
+                      #{i + 1}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{user.name}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{user.wonCount} Won • {new Intl.NumberFormat('id-ID', { notation: 'compact' }).format(user.pipelineAmount)} Pipeline</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         ) : (
           <div className="chart-card" style={{ background: 'var(--bg-card)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
             <div className="chart-title" style={{ fontSize: '16px', fontWeight: 600, marginBottom: '24px' }}>Task Status</div>
@@ -293,11 +293,11 @@ export default function DashboardMainPage() {
       {!isAdmin && (
         <div className="table-container" id="tour-dash-recent" style={{ marginTop: '32px' }}>
           <div className="table-header">
-             <div>
-                <h2 className="table-title">My Recent Tasks</h2>
-                <p className="page-subtitle">Menampilkan {Math.min(tasks.length, 5)} dari {tasks.length} tugas yang ditugaskan</p>
-             </div>
-             <button className="btn btn-secondary btn-sm" onClick={() => router.push('/dashboard/tasks')}>View All CRM Tasks</button>
+            <div>
+              <h2 className="table-title">My Recent Tasks</h2>
+              <p className="page-subtitle">Menampilkan {Math.min(tasks.length, 5)} dari {tasks.length} tugas yang ditugaskan</p>
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={() => router.push('/dashboard/tasks')}>View All CRM Tasks</button>
           </div>
           <div className="data-table-wrapper">
             <table className="data-table">
