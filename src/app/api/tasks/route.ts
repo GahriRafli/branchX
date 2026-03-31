@@ -74,8 +74,7 @@ export async function POST(request: Request) {
       const assignee = await (prisma as any).user.findUnique({ where: { id: task.assigneeId }, select: { name: true, whatsapp: true } });
       if (assignee?.whatsapp) {
         const leadName = leadId ? (await (prisma as any).lead.findUnique({ where: { id: leadId }, select: { lead_name: true } }))?.lead_name || '' : '';
-        const message = `Halo ${assignee.name}, Anda telah di-assign ke task: ${title}${leadName ? ` untuk Lead: ${leadName}` : ''}. Silakan cek website TheLeads.
-https://branch-x.vercel.app/`;
+        const message = `Halo ${assignee.name}, Anda telah di-assign ke task: ${title}${leadName ? ` untuk Lead: ${leadName}` : ''}. Silakan cek website TheLeads.\nhttps://branch-x.vercel.app/`;
         await sendWhatsAppNotification(assignee.whatsapp, message);
       }
     }
@@ -179,8 +178,7 @@ export async function PATCH(request: Request) {
       const assignee = await (prisma as any).user.findUnique({ where: { id: assigneeId }, select: { name: true, whatsapp: true } });
       if (assignee?.whatsapp) {
         const leadName = task.leadId ? (await (prisma as any).lead.findUnique({ where: { id: task.leadId }, select: { lead_name: true } }))?.lead_name || '' : '';
-        const message = `Halo ${assignee.name}, Anda telah di-assign ke task: ${task.title}${leadName ? ` untuk Lead: ${leadName}` : ''}. Silakan cek website TheLeads.
-https://branch-x.vercel.app/`;
+        const message = `Halo ${assignee.name}, Anda telah di-assign ke task: ${task.title}${leadName ? ` untuk Lead: ${leadName}` : ''}. Silakan cek website TheLeads.\nhttps://branch-x.vercel.app/`;
         await sendWhatsAppNotification(assignee.whatsapp, message);
       }
     }

@@ -35,12 +35,6 @@ export function parseLeadsExcel(buffer: Buffer): ParsedLead[] {
     // range:1 means skip 1 row (the title), use row 2 as headers
     const rows = XLSX.utils.sheet_to_json<any>(workbook.Sheets[sheetName], { range: 1, defval: null });
     
-    // Debug: log first row keys to help diagnose column name issues
-    if (rows.length > 0) {
-      console.log(`[LeadParser] Sheet "${sheetName}" columns:`, Object.keys(rows[0]));
-      console.log(`[LeadParser] Sample row 0:`, JSON.stringify(rows[0]).substring(0, 500));
-    }
-    
     for (const rawRow of rows) {
       // Normalize all keys: trim whitespace, collapse newlines to spaces
       const row: Record<string, any> = {};

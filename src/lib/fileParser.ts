@@ -20,8 +20,6 @@ export function parseExcel(buffer: Buffer): ParsedTask[] {
   const sheet = workbook.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json<RowRecord>(sheet);
 
-  console.log(`Parsing Excel: ${rows.length} rows found in sheet ${sheetName}`);
-
   if (rows.length === 0) return [];
 
   return rows.map((row, index) => {

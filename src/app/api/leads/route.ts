@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     // Build the query
     const where: any = {};
     if (status) where.status = status;
-    
+
     // Normal users see leads they own OR leads with tasks assigned to them. Admin sees all.
     if (session.role !== 'ADMIN') {
       where.OR = [
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
 
     const leads = await prisma.lead.findMany({
       where,
-      include: { 
+      include: {
         owner: { select: { id: true, name: true } },
         tasks: includeTasks ? {
           include: { assignee: { select: { id: true, name: true } } },
@@ -74,16 +74,16 @@ export async function PATCH(request: Request) {
       updateData.status = status;
       // Auto-cancel tasks if WON/LOST
       if (status === 'WON' || status === 'LOST') {
-         await prisma.task.updateMany({
-            where: { leadId: id, status: { notIn: ['COMPLETED', 'CANCELLED', 'DONE'] } },
-            data: { status: 'CANCELLED' }
-         });
+        await prisma.task.updateMany({
+          where: { leadId: id, status: { notIn: ['COMPLETED', 'CANCELLED', 'DONE'] } },
+          data: { status: 'CANCELLED' }
+        });
       }
     }
     if (priority) updateData.priority = priority;
     if (support_needed !== undefined) updateData.support_needed = support_needed;
     if (keterangan !== undefined) updateData.keterangan = keterangan;
-    
+
     // Only Admin can reassign
     if (session.role === 'ADMIN' && owner_user_id !== undefined) {
       updateData.owner_user_id = owner_user_id === 'unassigned' ? null : owner_user_id;
@@ -98,8 +98,8 @@ export async function PATCH(request: Request) {
     if (owner_user_id && lead.owner_user_id === owner_user_id && owner_user_id !== session.userId) {
       const owner = await (prisma as any).user.findUnique({ where: { id: owner_user_id }, select: { name: true, whatsapp: true } });
       if (owner?.whatsapp) {
-        const message = `Halo ${owner.name}, Anda telah di-assign sebagai pemilik data Lead baru: ${lead.lead_name}. Silakan cek pada website TheLeads.
-https://branch-x.vercel.app/`;
+        const leadCategory = lead.lead_category ? ` (Kategori: ${lead.lead_category})` : '';
+        const message = `Halo ${owner.name}, Anda telah di-assign sebagai pemilik data Lead baru: ${lead.lead_name}${leadCategory}. Silakan cek pada website TheLeads.\nhttps://branch-x.vercel.app/`;
         await sendWhatsAppNotification(owner.whatsapp, message);
       }
     }

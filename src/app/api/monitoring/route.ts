@@ -98,12 +98,19 @@ export async function POST(request: Request) {
       target, 
       total, 
       activityType, 
-      branchCode
+      branchCode,
+      ktp
     } = body;
 
     const type = activityType || 'GMM';
     const isGMM = type === 'GMM';
     const status = isGMM ? 'PENDING' : 'Belum ada Pengajuan';
+    
+    // Logic for KTP and Tabungan Simpel
+    let finalProduct = String(product || '');
+    if (isGMM && (!ktp || String(ktp).trim() === "")) {
+      finalProduct = "Tabungan Simpel";
+    }
     
     const inputAmount = parseFloat(String(amount)) || 1;
     const inputTarget = parseFloat(String(target)) || 1;
@@ -126,7 +133,8 @@ export async function POST(request: Request) {
         name: String(name || 'Unknown'),
         codeReferral: String(codeReferral || ''),
         noAccount: val,
-        product: String(product || ''),
+        product: finalProduct,
+        ktp: String(ktp || ''),
         amount: inputAmount,
         target: inputTarget,
         total: inputTotal,
@@ -162,7 +170,8 @@ export async function POST(request: Request) {
         name: String(name || 'Unknown'), 
         codeReferral: String(codeReferral || ''), 
         noAccount: values[0] || "",
-        product: String(product || ''), 
+        product: finalProduct, 
+        ktp: String(ktp || ''),
         amount: inputAmount, 
         target: inputTarget, 
         total: inputTotal,
@@ -198,13 +207,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ entry }, { status: 201 });
   } catch (err: any) {
-    console.error('POST Monitoring error details:', {
-      message: err.message,
-      stack: err.stack,
-      name: err.name,
-      code: err.code,
-    });
-    return NextResponse.json({ error: 'Internal server error', details: err.message }, { status: 500 });
+    console.error('POST Monitoring error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -265,6 +269,10 @@ export async function PATCH(request: Request) {
     if (updateData.amount) updateData.amount = Number(updateData.amount);
     if (updateData.target) updateData.target = Number(updateData.target);
     if (updateData.total) updateData.total = Number(updateData.total);
+
+    if (updateData.activityType === 'GMM' && (!updateData.ktp || String(updateData.ktp).trim() === "")) {
+      updateData.product = "Tabungan Simpel";
+    }
 
     const entry = await (prisma as any).monitoringActivity.update({
       where: { id },

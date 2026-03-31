@@ -69,7 +69,7 @@ export default function MonitoringAnalyticsPage() {
     const filtered = allData.filter(item => item.activityType === activeTab);
     
     // Define success/failure statuses
-    const successStatuses = ['VERIFIED', 'Pengajuan Cair', 'Maintain Nasabah', 'NEW CIF', 'NTB'];
+    const successStatuses = ['VERIFIED', 'Pengajuan Cair', 'Maintain Nasabah', 'NEW CIF', 'ETB'];
     const failureStatuses = [
       'REJECTED', 
       'TAKEOUT', 
@@ -278,7 +278,7 @@ export default function MonitoringAnalyticsPage() {
           {(activeTab === 'GMM' ? [
             { s: 'PENDING', i: '⏳' },
             { s: 'NEW CIF', i: '🆕' },
-            { s: 'NTB', i: '🏛️' }
+            { s: 'ETB', i: '🏛️' }
           ] : [
             { s: 'Belum ada Pengajuan', i: '📝' },
             { s: 'Pengajuan Sudah (Tertarik)', i: '🎯' },
@@ -291,7 +291,7 @@ export default function MonitoringAnalyticsPage() {
             { s: 'Maintain Nasabah', i: '🤝' }
           ]).map(statusObj => {
             const count = allData.filter(d => d.activityType === activeTab && d.status === statusObj.s).length;
-            const successStatuses = ['VERIFIED', 'Pengajuan Cair', 'Maintain Nasabah', 'NEW CIF', 'NTB'];
+            const successStatuses = ['VERIFIED', 'Pengajuan Cair', 'Maintain Nasabah', 'NEW CIF', 'ETB'];
             const failureStatuses = ['REJECTED', 'TAKEOUT', 'Pengajuan Ditolak', 'Dalam Proses Pengajuan (Ditolak)', 'Pengajuan Tidak Tertarik'];
             
             const color = successStatuses.includes(statusObj.s) ? '#10b981' : 

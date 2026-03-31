@@ -42,7 +42,7 @@ export async function GET() {
       })
     ]);
 
-    const gmmArr = allActivities.filter((a: any) => a.activityType === 'GMM' && ['NEW CIF', 'NTB'].includes(a.status));
+    const gmmArr = allActivities.filter((a: any) => a.activityType === 'GMM' && ['NEW CIF', 'ETB'].includes(a.status));
     const ksmArr = allActivities.filter((a: any) => a.activityType === 'KSM' && ['Pengajuan Cair', 'Maintain Nasabah'].includes(a.status));
     const kprArr = allActivities.filter((a: any) => a.activityType === 'KPR' && ['Pengajuan Cair', 'Maintain Nasabah'].includes(a.status));
     const ccArr = allActivities.filter((a: any) => a.activityType === 'CC' && ['Pengajuan Cair', 'Maintain Nasabah'].includes(a.status));

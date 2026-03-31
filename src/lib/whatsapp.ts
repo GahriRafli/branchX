@@ -36,13 +36,11 @@ export async function sendWhatsAppNotification(phone: string | null, message: st
       body: new URLSearchParams({
         target: cleanPhone,
         message: message,
-        countryCode: '62' // default for Indonesia
+        countryCode: '62'
       })
     });
     
-    const result = await res.json();
-    console.log('[WhatsApp Sync] Fonnte Response:', result);
-    return result;
+    return await res.json();
   } catch (error) {
     console.error('WhatsApp Sync Error:', error);
     return { status: 'error', error };

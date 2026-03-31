@@ -236,6 +236,10 @@ export default function DashboardLayout({
               <span className="icon">🏃</span> Activity
             </Link>
 
+            <Link href="/dashboard/leaderboard" className={`sidebar-link ${pathname === '/dashboard/leaderboard' ? 'active' : ''}`} onClick={() => setSidebarOpen(false)}>
+              <span className="icon">🏆</span> Leaderboard
+            </Link>
+
             {isAdmin && (
               <>
                 <div className="sidebar-group-label" style={{ padding: '16px 16px 4px', fontSize: '11px', fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Monitoring</div>
@@ -290,14 +294,35 @@ export default function DashboardLayout({
             </button>
           </nav>
           <div className="sidebar-footer">
-            <div className="sidebar-user">
-              <div className="sidebar-avatar">{user.name.charAt(0)}</div>
-              <div className="sidebar-user-info">
-                <div className="sidebar-user-name">{user.name}</div>
-                <div className="sidebar-user-role">{user.role} (NIP: {user.nip})</div>
+            <div className="sidebar-user" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                <div className="sidebar-avatar">{user.name.charAt(0)}</div>
+                <div className="sidebar-user-info">
+                  <div className="sidebar-user-name">{user.name}</div>
+                  <div className="sidebar-user-role">{user.role} (NIP: {user.nip})</div>
+                </div>
               </div>
+              <button 
+                onClick={logout} 
+                className="logout-icon-btn" 
+                title="Sign Out"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: '8px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--text-tertiary)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                🚪
+              </button>
             </div>
-            <button onClick={logout} className="btn btn-secondary btn-sm" style={{ width: '100%', marginTop: '12px' }}>Sign Out</button>
           </div>
         </aside>
         <main className="main-content">{children}</main>

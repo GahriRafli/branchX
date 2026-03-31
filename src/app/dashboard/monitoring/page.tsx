@@ -72,6 +72,7 @@ export default function MonitoringPage() {
     codeReferral: '',
     noAccounts: [''],
     product: '',
+    ktp: '',
     amount: '0',
     target: '0',
     total: '0',
@@ -173,7 +174,7 @@ export default function MonitoringPage() {
         const d = await res.json();
         setError(d.error || 'Failed to save entry');
         if (d.details) setErrorDetails(d.details);
-        showToast('Error', d.error || 'Failed to save entry', 'error');
+        showToast('Error', d.details || d.error || 'Failed to save entry', 'error');
       }
     } catch (err) {
       console.error(err);
@@ -379,19 +380,28 @@ export default function MonitoringPage() {
   const exportToExcel = () => {
     let exportData;
     if (activeTab === 'GMM') {
-      const summary: Record<string, { name: string, codeReferral: string, newCif: number, ntb: number, total: number }> = {};
+      const summary: Record<string, { name: string, codeReferral: string, newCif: number, etb: number, simpel: number, total: number }> = {};
       filteredData.forEach(item => {
         const key = item.codeReferral || item.name;
-        if (!summary[key]) summary[key] = { name: item.name, codeReferral: item.codeReferral, newCif: 0, ntb: 0, total: 0 };
-        if (item.status === 'NEW CIF') summary[key].newCif++;
-        else if (item.status === 'NTB') summary[key].ntb++;
+        if (!summary[key]) summary[key] = { name: item.name, codeReferral: item.codeReferral, newCif: 0, etb: 0, simpel: 0, total: 0 };
+        
+        if (item.product === 'Tabungan Simpel') {
+          summary[key].simpel++;
+        }
+        if (item.status === 'NEW CIF') {
+          summary[key].newCif++;
+        }
+        if (item.status === 'ETB') {
+          summary[key].etb++;
+        }
         summary[key].total++;
       });
       exportData = Object.values(summary).map(s => ({
         'Nama Employee': s.name,
         'Code Referral': s.codeReferral,
         'Total New CIF': s.newCif,
-        'Total NTB': s.ntb,
+        'Total ETB': s.etb,
+        'Total Tabungan Simpel': s.simpel,
         'Grand Total': s.total
       }));
     } else {
@@ -413,16 +423,24 @@ export default function MonitoringPage() {
   const exportToCSV = () => {
     let csvContent;
     if (activeTab === 'GMM') {
-      const headers = ['Nama Employee', 'Code Referral', 'Total New CIF', 'Total NTB', 'Grand Total'];
-      const summary: Record<string, { name: string, codeReferral: string, newCif: number, ntb: number, total: number }> = {};
+      const headers = ['Nama Employee', 'Code Referral', 'Total New CIF', 'Total ETB', 'Total Tabungan Simpel', 'Grand Total'];
+      const summary: Record<string, { name: string, codeReferral: string, newCif: number, etb: number, simpel: number, total: number }> = {};
       filteredData.forEach(item => {
         const key = item.codeReferral || item.name;
-        if (!summary[key]) summary[key] = { name: item.name, codeReferral: item.codeReferral, newCif: 0, ntb: 0, total: 0 };
-        if (item.status === 'NEW CIF') summary[key].newCif++;
-        else if (item.status === 'NTB') summary[key].ntb++;
+        if (!summary[key]) summary[key] = { name: item.name, codeReferral: item.codeReferral, newCif: 0, etb: 0, simpel: 0, total: 0 };
+        
+        if (item.product === 'Tabungan Simpel') {
+          summary[key].simpel++;
+        }
+        if (item.status === 'NEW CIF') {
+          summary[key].newCif++;
+        }
+        if (item.status === 'ETB') {
+          summary[key].etb++;
+        }
         summary[key].total++;
       });
-      const rows = Object.values(summary).map(s => [s.name, s.codeReferral, s.newCif, s.ntb, s.total]);
+      const rows = Object.values(summary).map(s => [s.name, s.codeReferral, s.newCif, s.etb, s.simpel, s.total]);
       csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
     } else {
       const headers = ['Nama Employee', 'Code Referral', 'Code Cabang', 'Date', 'No Account', 'Status'];
@@ -541,9 +559,10 @@ export default function MonitoringPage() {
                 setFormType(activeTab);
                 setForm({
                   name: user?.name || '',
-                  codeReferral: user?.nip || '',
+                  codeReferral: '',
                   noAccounts: [''],
                   product: '',
+                  ktp: '',
                   amount: '1',
                   target: '1',
                   total: '1',
@@ -582,6 +601,7 @@ export default function MonitoringPage() {
                   { label: 'NAMA EMPLOYEE', key: 'name' },
                   { label: 'CODE REFERRAL', key: 'codeReferral' },
                   { label: 'CODE CABANG', key: 'branchCode' },
+                  { label: 'KTP', key: 'ktp' },
                   { label: 'DATE', key: 'createdAt' },
                   ...(activeTab === 'GMM' ? [
                     { label: 'NO ACCOUNT', key: 'noAccount' },
@@ -614,6 +634,7 @@ export default function MonitoringPage() {
                   <td style={{ fontWeight: 600, color: '#1e293b', height: '56px', verticalAlign: 'middle' }}>{item.name}</td>
                   <td style={{ color: '#64748b', fontSize: '12px', height: '56px', verticalAlign: 'middle' }}>{item.codeReferral}</td>
                   <td style={{ color: '#64748b', height: '56px', verticalAlign: 'middle' }}>{item.branchCode || '-'}</td>
+                  <td style={{ color: '#64748b', fontSize: '12px', height: '56px', verticalAlign: 'middle' }}>{(item as any).ktp || '-'}</td>
                   <td style={{ color: '#64748b', height: '56px', verticalAlign: 'middle' }}>{new Date(item.createdAt).toLocaleDateString()}</td>
                   {activeTab === 'GMM' ? (
                     <>
@@ -625,7 +646,7 @@ export default function MonitoringPage() {
                   ) : null}
                   <td style={{ height: '56px', verticalAlign: 'middle' }}>
                     <span className={`status-badge ${
-                      ['VERIFIED', 'Pengajuan Cair', 'Maintain Nasabah', 'NEW CIF', 'NTB'].includes(item.status) ? 'status-verified' :
+                      ['VERIFIED', 'Pengajuan Cair', 'Maintain Nasabah', 'NEW CIF', 'ETB'].includes(item.status) ? 'status-verified' :
                       ['REJECTED', 'TAKEOUT', 'Pengajuan Ditolak', 'Dalam Proses Pengajuan (Ditolak)', 'Pengajuan Tidak Tertarik'].includes(item.status) ? 'status-rejected' :
                       'status-pending'
                     }`}>
@@ -645,11 +666,11 @@ export default function MonitoringPage() {
                                 className="btn btn-sm"
                               >🆕 CIF</button>
                               <button
-                                onClick={() => handleVerify(item.id, 'NTB')}
-                                title="NTB"
+                                onClick={() => handleVerify(item.id, 'ETB')}
+                                title="ETB"
                                 style={{ background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', padding: '6px', fontSize: '10px' }}
                                 className="btn btn-sm"
-                              >🏛️ NTB</button>
+                              >🏛️ ETB</button>
                             </>
                           ) : (
                             <button
@@ -675,6 +696,7 @@ export default function MonitoringPage() {
                           codeReferral: item.codeReferral,
                           noAccounts: item.noAccount ? item.noAccount.split(', ') : [''],
                           product: item.product,
+                          ktp: (item as any).ktp || '',
                           amount: String(item.amount),
                           target: String(item.target),
                           total: String(item.total),
@@ -847,7 +869,7 @@ export default function MonitoringPage() {
             {activeTab === 'GMM' ? (
               <>
                 <button className="btn" style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={() => handleBulkVerify('NEW CIF')}>🆕 NEW CIF</button>
-                <button className="btn" style={{ background: '#0ea5e9', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={() => handleBulkVerify('NTB')}>🏛️ NTB</button>
+                <button className="btn" style={{ background: '#0ea5e9', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={() => handleBulkVerify('ETB')}>🏛️ ETB</button>
                 <button className="btn" style={{ background: '#f43f5e', color: 'white', border: 'none', borderRadius: '8px', padding: '6px 16px', fontSize: '13px', fontWeight: 600 }} onClick={() => handleBulkReject('REJECTED')}>Reject</button>
               </>
             ) : (
@@ -915,6 +937,21 @@ export default function MonitoringPage() {
                   <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>CODE CABANG (OPTIONAL)</label>
                   <input className="form-input" placeholder="Masukkan kode cabang" value={form.branchCode} onChange={e => setForm({ ...form, branchCode: e.target.value })} />
                 </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>NOMOR KTP (MANDATORY UNTUK LEADERBOARD)</label>
+                <input 
+                  className="form-input" 
+                  placeholder="Masukkan 16 digit nomor KTP" 
+                  value={form.ktp} 
+                  onChange={e => setForm({ ...form, ktp: e.target.value })}
+                />
+                {!form.ktp && (
+                  <p style={{ fontSize: '10px', color: '#f59e0b', marginTop: '4px', fontStyle: 'italic' }}>
+                    ⚠️ Tanpa KTP, data {formType === 'GMM' ? 'otomatis kategori "Simpel" dan' : ''} tidak akan masuk perhitungan Leaderboard.
+                  </p>
+                )}
               </div>
 
               {formType === 'GMM' ? (

@@ -146,8 +146,6 @@ export async function DELETE(request: Request) {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 
-    console.log('Attempting to delete user with ID:', id, 'By admin:', session.userId);
-
     if (!id) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
