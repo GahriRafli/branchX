@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/auth';
 
 // GET dashboard stats (admin only)
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await getSession();
     if (!session) {
@@ -16,23 +16,68 @@ export async function GET() {
     // Base filter for regular users
     const baseLeadWhere = isUser ? { owner_user_id: userId } : {};
 
-    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-    const endOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
+    const { searchParams = new URL(request.url).searchParams } = new URL(request.url);
+    const monthParam = searchParams.get('month');
+    const yearParam = searchParams.get('year');
+
+    const currentDate = new Date();
+    const currentMonth = monthParam ? parseInt(monthParam) : currentDate.getMonth();
+    const currentYear = yearParam ? parseInt(yearParam) : currentDate.getFullYear();
+
+    const startOfMonth = new Date(currentYear, currentMonth, 1);
+    const endOfMonth = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59);
 
     const [
       totalTasks, openTasks, inProgressTasks, doneTasks,
       totalLeads, wonLeads, totalUsers,
       leadsList, usersList, allActivities
     ] = await Promise.all([
-      prisma.task.count({ where: isUser ? { assigneeId: userId } : {} }),
-      prisma.task.count({ where: { ...(isUser ? { assigneeId: userId } : {}), status: 'OPEN' } }),
-      prisma.task.count({ where: { ...(isUser ? { assigneeId: userId } : {}), status: 'IN_PROGRESS' } }),
-      prisma.task.count({ where: { ...(isUser ? { assigneeId: userId } : {}), status: 'DONE' } }),
-      prisma.lead.count({ where: baseLeadWhere }),
-      prisma.lead.count({ where: { ...baseLeadWhere, status: 'WON' } }),
+      prisma.task.count({ 
+        where: { 
+          ...(isUser ? { assigneeId: userId } : {}),
+          createdAt: { gte: startOfMonth, lte: endOfMonth }
+        } 
+      }),
+      prisma.task.count({ 
+        where: { 
+          ...(isUser ? { assigneeId: userId } : {}), 
+          status: 'OPEN',
+          createdAt: { gte: startOfMonth, lte: endOfMonth }
+        } 
+      }),
+      prisma.task.count({ 
+        where: { 
+          ...(isUser ? { assigneeId: userId } : {}), 
+          status: 'IN_PROGRESS',
+          createdAt: { gte: startOfMonth, lte: endOfMonth }
+        } 
+      }),
+      prisma.task.count({ 
+        where: { 
+          ...(isUser ? { assigneeId: userId } : {}), 
+          status: 'DONE',
+          createdAt: { gte: startOfMonth, lte: endOfMonth }
+        } 
+      }),
+      prisma.lead.count({ 
+        where: { 
+          ...baseLeadWhere,
+          createdAt: { gte: startOfMonth, lte: endOfMonth }
+        } 
+      }),
+      prisma.lead.count({ 
+        where: { 
+          ...baseLeadWhere, 
+          status: 'WON',
+          createdAt: { gte: startOfMonth, lte: endOfMonth }
+        } 
+      }),
       prisma.user.count(),
       prisma.lead.findMany({ 
-         where: baseLeadWhere, 
+         where: {
+           ...baseLeadWhere,
+           createdAt: { gte: startOfMonth, lte: endOfMonth }
+         }, 
          select: { status: true, last_activity_at: true, createdAt: true, potential_amount: true, owner_user_id: true } 
       }),
       prisma.user.findMany({ select: { id: true, name: true } }),

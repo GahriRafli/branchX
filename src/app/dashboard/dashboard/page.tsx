@@ -70,11 +70,14 @@ export default function DashboardMainPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewDate, setViewDate] = useState(new Date());
 
   const fetchData = useCallback(async () => {
     try {
+      const month = viewDate.getMonth();
+      const year = viewDate.getFullYear();
       const [statsRes, tasksRes] = await Promise.all([
-        fetch('/api/dashboard'),
+        fetch(`/api/dashboard?month=${month}&year=${year}`),
         fetch('/api/tasks')
       ]);
       const statsData = await statsRes.json();
@@ -85,7 +88,7 @@ export default function DashboardMainPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [viewDate]);
 
   useEffect(() => {
     fetchData();
@@ -138,17 +141,43 @@ export default function DashboardMainPage() {
   };
 
   const currentMonthName = useMemo(() => {
-    return new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(new Date()).toUpperCase();
-  }, []);
+    return new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(viewDate).toUpperCase();
+  }, [viewDate]);
+
+  const changeMonth = (offset: number) => {
+    const newDate = new Date(viewDate);
+    newDate.setMonth(newDate.getMonth() + offset);
+    setViewDate(newDate);
+  };
 
   if (loading || !stats) return <div className="loading-spinner" />;
 
   return (
     <>
       <div className="page-header">
-        <div>
-          <h1 className="page-title">The Leads Dashboard</h1>
-          <p className="page-subtitle">Monitor pipeline performance and follow-up activities</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+          <div>
+            <h1 className="page-title">The Leads Dashboard</h1>
+            <p className="page-subtitle">Monitor pipeline performance and follow-up activities</p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', background: 'var(--bg-card)', padding: '8px 16px', borderRadius: '12px', border: '1px solid var(--border-subtle)', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
+            <button 
+              onClick={() => changeMonth(-1)}
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '18px', padding: '4px', color: 'var(--text-secondary)' }}
+            >
+              ◀
+            </button>
+            <div style={{ textAlign: 'center', minWidth: '140px' }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{currentMonthName} {viewDate.getFullYear()}</div>
+              <div style={{ fontSize: '10px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Periode Monitoring</div>
+            </div>
+            <button 
+              onClick={() => changeMonth(1)}
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '18px', padding: '4px', color: 'var(--text-secondary)' }}
+            >
+              ▶
+            </button>
+          </div>
         </div>
       </div>
 

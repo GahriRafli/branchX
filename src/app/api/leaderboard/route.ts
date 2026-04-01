@@ -12,6 +12,13 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const activityType = searchParams.get('type') || 'GMM'; // GMM, KSM, KPR, CC
     
+    const now = new Date();
+    const month = searchParams.get('month') ? parseInt(searchParams.get('month')!) : now.getMonth();
+    const year = searchParams.get('year') ? parseInt(searchParams.get('year')!) : now.getFullYear();
+
+    const startDate = new Date(year, month, 1);
+    const endDate = new Date(year, month + 1, 0, 23, 59, 59, 999);
+
     // Define successful statuses based on activity type
     // Any status included in this list counts as a "win" for the leaderboard
     const successfulStatuses = [
@@ -35,7 +42,11 @@ export async function GET(request: Request) {
       where: {
         activityType: activityType,
         status: { in: successfulStatuses },
-        ktp: { not: "" }
+        ktp: { not: "" },
+        createdAt: {
+          gte: startDate,
+          lte: endDate
+        }
       },
       select: {
         codeReferral: true,

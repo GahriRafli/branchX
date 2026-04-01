@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../layout';
 
 const ACTIVITY_TYPES = ['GMM', 'KSM', 'KPR', 'CC'] as const;
@@ -17,15 +17,30 @@ export default function LeaderboardPage() {
   const [activeTab, setActiveTab] = useState<ActivityType>('GMM');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [viewDate, setViewDate] = useState(new Date());
+
+  const currentMonthName = useMemo(() => {
+    return new Intl.DateTimeFormat('id-ID', { month: 'long' }).format(viewDate).toUpperCase();
+  }, [viewDate]);
+
+  const changeMonth = (offset: number) => {
+    const newDate = new Date(viewDate);
+    newDate.setMonth(newDate.getMonth() + offset);
+    setViewDate(newDate);
+  };
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/leaderboard?type=${activeTab}`);
+        const month = viewDate.getMonth();
+        const year = viewDate.getFullYear();
+        const res = await fetch(`/api/leaderboard?type=${activeTab}&month=${month}&year=${year}`);
         const data = await res.json();
         if (data.leaderboard) {
           setLeaderboard(data.leaderboard);
+        } else {
+          setLeaderboard([]);
         }
       } catch (err) {
         console.error('Failed to fetch leaderboard:', err);
@@ -35,7 +50,7 @@ export default function LeaderboardPage() {
     };
 
     fetchLeaderboard();
-  }, [activeTab]);
+  }, [activeTab, viewDate]);
 
   if (authLoading) return <div className="loading-spinner" />;
 
@@ -52,9 +67,45 @@ export default function LeaderboardPage() {
         }}>
           🏆 Activity Leaderboard
         </h1>
-        <p style={{ color: '#64748b', fontSize: '16px' }}>
+        <p style={{ color: '#64748b', fontSize: '16px', marginBottom: '24px' }}>
           Peringkat performa tim berdasarkan jumlah aktivitas yang berhasil
         </p>
+
+        {/* Month Navigation */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          gap: '24px', 
+          background: 'white', 
+          padding: '12px 24px', 
+          borderRadius: '20px', 
+          border: '1px solid #e2e8f0',
+          width: 'fit-content',
+          margin: '0 auto',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+        }}>
+          <button 
+            onClick={() => changeMonth(-1)}
+            style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', width: '40px', height: '40px', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s' }}
+            onMouseOver={(e: any) => e.target.style.background = '#f1f5f9'}
+            onMouseOut={(e: any) => e.target.style.background = '#f8fafc'}
+          >
+            ◀
+          </button>
+          <div style={{ textAlign: 'center', minWidth: '160px' }}>
+            <div style={{ fontSize: '18px', fontWeight: 800, color: '#1e293b' }}>{currentMonthName} {viewDate.getFullYear()}</div>
+            <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '2px' }}>Periode Leaderboard</div>
+          </div>
+          <button 
+            onClick={() => changeMonth(1)}
+            style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', width: '40px', height: '40px', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s' }}
+            onMouseOver={(e: any) => e.target.style.background = '#f1f5f9'}
+            onMouseOut={(e: any) => e.target.style.background = '#f8fafc'}
+          >
+            ▶
+          </button>
+        </div>
       </header>
 
       {/* Activity Tabs */}

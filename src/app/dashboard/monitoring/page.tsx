@@ -71,13 +71,14 @@ export default function MonitoringPage() {
     name: '',
     codeReferral: '',
     noAccounts: [''],
+    ktps: [''], // Changed from single ktp string to array
     product: '',
-    ktp: '',
     amount: '0',
     target: '0',
     total: '0',
     branchCode: '',
-    status: ''
+    status: '',
+    date: new Date().toISOString().split('T')[0]
   });
   const [error, setError] = useState('');
   const [errorDetails, setErrorDetails] = useState('');
@@ -144,13 +145,16 @@ export default function MonitoringPage() {
       amount: parseFloat(form.amount) || 0,
       target: parseFloat(form.target) || 0,
       total: parseFloat(form.total) || 0,
-      status: editingEntry ? editingEntry.status : status
+      status: editingEntry ? editingEntry.status : status,
+      createdAt: form.date // Custom activity date
     };
 
     if (editingEntry) {
       body.noAccount = form.noAccounts[0] || '';
+      body.ktp = form.ktps[0] || '';
     } else {
       body.noAccount = form.noAccounts.filter(Boolean);
+      body.ktp = form.ktps.filter(Boolean);
     }
     
     // Add status if provided
@@ -158,6 +162,8 @@ export default function MonitoringPage() {
 
     // Remove the array versions from the body
     delete body.noAccounts;
+    delete (body as any).ktps;
+    delete body.date;
 
     try {
       const res = await fetch('/api/monitoring', {
@@ -561,13 +567,14 @@ export default function MonitoringPage() {
                   name: user?.name || '',
                   codeReferral: '',
                   noAccounts: [''],
+                  ktps: [''],
                   product: '',
-                  ktp: '',
                   amount: '1',
                   target: '1',
                   total: '1',
                   branchCode: '',
-                  status: ''
+                  status: '',
+                  date: new Date().toISOString().split('T')[0]
                 });
                 setShowModal(true);
               }}
@@ -598,22 +605,23 @@ export default function MonitoringPage() {
                   onChange={() => toggleSelectAll(paginatedData.map(d => d.id))} 
                 /></th>
                 {[
-                  { label: 'NAMA EMPLOYEE', key: 'name' },
-                  { label: 'CODE REFERRAL', key: 'codeReferral' },
-                  { label: 'CODE CABANG', key: 'branchCode' },
-                  { label: 'KTP', key: 'ktp' },
-                  { label: 'DATE', key: 'createdAt' },
+                  { label: 'NAMA EMPLOYEE', key: 'name', priority: 'high' },
+                  { label: 'CODE REFERRAL', key: 'codeReferral', priority: 'low' },
+                  { label: 'CODE CABANG', key: 'branchCode', priority: 'low' },
+                  { label: 'KTP', key: 'ktp', priority: 'low' },
+                  { label: 'DATE', key: 'createdAt', priority: 'med' },
                   ...(activeTab === 'GMM' ? [
-                    { label: 'NO ACCOUNT', key: 'noAccount' },
-                    { label: 'PRODUCT', key: 'product' }
+                    { label: 'NO ACCOUNT', key: 'noAccount', priority: 'high' },
+                    { label: 'PRODUCT', key: 'product', priority: 'med' }
                   ] : activeTab === 'KSM' || activeTab === 'KPR' || activeTab === 'CC' ? [
-                    { label: 'NO ACCOUNT', key: 'noAccount' }
+                    { label: 'NO ACCOUNT', key: 'noAccount', priority: 'high' }
                   ] : []),
-                  { label: 'STATUS', key: 'status' }
+                  { label: 'STATUS', key: 'status', priority: 'high' }
                 ].map(col => (
                   <th
                     key={col.key}
-                    style={{ fontSize: '11px', color: '#64748b', cursor: 'pointer', userSelect: 'none' }}
+                    className={`col-priority-${col.priority}`}
+                    style={{ fontSize: '11px', color: '#64748b', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap', padding: '12px 8px' }}
                     onClick={() => handleSort(col.key as any)}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -631,20 +639,20 @@ export default function MonitoringPage() {
               {paginatedData.map(item => (
                 <tr key={item.id}>
                   <td style={{ height: '56px', verticalAlign: 'middle' }}><input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)} /></td>
-                  <td style={{ fontWeight: 600, color: '#1e293b', height: '56px', verticalAlign: 'middle' }}>{item.name}</td>
-                  <td style={{ color: '#64748b', fontSize: '12px', height: '56px', verticalAlign: 'middle' }}>{item.codeReferral}</td>
-                  <td style={{ color: '#64748b', height: '56px', verticalAlign: 'middle' }}>{item.branchCode || '-'}</td>
-                  <td style={{ color: '#64748b', fontSize: '12px', height: '56px', verticalAlign: 'middle' }}>{(item as any).ktp || '-'}</td>
-                  <td style={{ color: '#64748b', height: '56px', verticalAlign: 'middle' }}>{new Date(item.createdAt).toLocaleDateString()}</td>
+                  <td className="col-priority-high" style={{ fontWeight: 600, color: '#1e293b', height: '56px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>{item.name}</td>
+                  <td className="col-priority-low" style={{ color: '#64748b', fontSize: '12px', height: '56px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>{item.codeReferral}</td>
+                  <td className="col-priority-low" style={{ color: '#64748b', height: '56px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>{item.branchCode || '-'}</td>
+                  <td className="col-priority-low" style={{ color: '#64748b', fontSize: '12px', height: '56px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>{(item as any).ktp || '-'}</td>
+                  <td className="col-priority-med" style={{ color: '#64748b', height: '56px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>{new Date(item.createdAt).toLocaleDateString()}</td>
                   {activeTab === 'GMM' ? (
                     <>
-                      <td style={{ color: '#1e293b', height: '56px', verticalAlign: 'middle' }}>{item.noAccount || '-'}</td>
-                      <td style={{ color: '#1e293b', height: '56px', verticalAlign: 'middle' }}>{item.product || '-'}</td>
+                      <td className="col-priority-high" style={{ color: '#1e293b', height: '56px', verticalAlign: 'middle', whiteSpace: 'nowrap', minWidth: '120px' }}>{item.noAccount || '-'}</td>
+                      <td className="col-priority-med" style={{ color: '#1e293b', height: '56px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>{item.product || '-'}</td>
                     </>
                   ) : activeTab === 'KSM' || activeTab === 'KPR' || activeTab === 'CC' ? (
-                    <td style={{ color: '#1e293b', height: '56px', verticalAlign: 'middle' }}>{item.noAccount || '-'}</td>
+                    <td className="col-priority-high" style={{ color: '#1e293b', height: '56px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>{item.noAccount || '-'}</td>
                   ) : null}
-                  <td style={{ height: '56px', verticalAlign: 'middle' }}>
+                  <td className="col-priority-high" style={{ height: '56px', verticalAlign: 'middle' }}>
                     <span className={`status-badge ${
                       ['VERIFIED', 'Pengajuan Cair', 'Maintain Nasabah', 'NEW CIF', 'ETB'].includes(item.status) ? 'status-verified' :
                       ['REJECTED', 'TAKEOUT', 'Pengajuan Ditolak', 'Dalam Proses Pengajuan (Ditolak)', 'Pengajuan Tidak Tertarik'].includes(item.status) ? 'status-rejected' :
@@ -695,13 +703,14 @@ export default function MonitoringPage() {
                           name: item.name,
                           codeReferral: item.codeReferral,
                           noAccounts: item.noAccount ? item.noAccount.split(', ') : [''],
+                          ktps: (item as any).ktp ? (item as any).ktp.split(', ') : [''],
                           product: item.product,
-                          ktp: (item as any).ktp || '',
                           amount: String(item.amount),
                           target: String(item.target),
                           total: String(item.total),
                           branchCode: item.branchCode || '',
-                          status: item.status
+                          status: item.status,
+                          date: new Date(item.createdAt).toISOString().split('T')[0]
                         });
                         setShowModal(true);
                       }}>✏️</button>
@@ -939,19 +948,56 @@ export default function MonitoringPage() {
                 </div>
               </div>
 
-              <div className="form-group" style={{ marginBottom: '16px' }}>
-                <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>NOMOR KTP (MANDATORY UNTUK LEADERBOARD)</label>
-                <input 
-                  className="form-input" 
-                  placeholder="Masukkan 16 digit nomor KTP" 
-                  value={form.ktp} 
-                  onChange={e => setForm({ ...form, ktp: e.target.value })}
-                />
-                {!form.ktp && (
-                  <p style={{ fontSize: '10px', color: '#f59e0b', marginTop: '4px', fontStyle: 'italic' }}>
-                    ⚠️ Tanpa KTP, data {formType === 'GMM' ? 'otomatis kategori "Simpel" dan' : ''} tidak akan masuk perhitungan Leaderboard.
-                  </p>
-                )}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                <div className="form-group">
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>DATE ACTIVITY</label>
+                  <input 
+                    type="date"
+                    className="form-input" 
+                    value={form.date} 
+                    onChange={e => setForm({ ...form, date: e.target.value })} 
+                    required 
+                  />
+                </div>
+                <div className="form-group">
+                  <label style={{ fontSize: '10px', fontWeight: 700, color: '#94a3b8' }}>NOMOR KTP (BULK)</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                    {form.ktps.map((k, idx) => (
+                      <div key={idx} style={{ display: 'flex', gap: '8px' }}>
+                        <input 
+                          className="form-input" 
+                          style={{ flex: 1, borderColor: k && k.length !== 16 ? '#ef4444' : '#e2e8f0' }} 
+                          value={k} 
+                          placeholder={`Nomor KTP ${idx+1} (16 digit)`} 
+                          maxLength={16}
+                          onChange={e => {
+                            const val = e.target.value.replace(/\D/g, ''); // Numeric only
+                            const newKtps = [...form.ktps];
+                            newKtps[idx] = val;
+                            setForm({ ...form, ktps: newKtps });
+                          }} 
+                        />
+                        {idx === 0 ? (
+                          <button type="button" onClick={() => setForm({ ...form, ktps: [...form.ktps, ''] })} style={{ width: '40px', height: '40px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', fontSize: '18px', fontWeight: 600, color: '#00abc6' }}> + </button>
+                        ) : (
+                          <button type="button" onClick={() => {
+                            const newKtps = [...form.ktps];
+                            newKtps.splice(idx, 1);
+                            setForm({ ...form, ktps: newKtps });
+                          }} style={{ width: '40px', height: '40px', borderRadius: '8px', border: '1px solid #fee2e2', background: 'white', cursor: 'pointer', fontSize: '14px', color: '#ef4444' }}> ✕ </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {form.ktps.some(k => k && k.length !== 16) && (
+                    <p style={{ fontSize: '10px', color: '#ef4444', marginTop: '4px' }}>⚠️ Nomor KTP harus 16 digit.</p>
+                  )}
+                  {form.ktps.every(k => !k) && (
+                    <p style={{ fontSize: '10px', color: '#f59e0b', marginTop: '4px', fontStyle: 'italic' }}>
+                      ⚠️ Tanpa KTP, data {formType === 'GMM' ? 'otomatis kategori "Simpel" dan' : ''} tidak akan masuk perhitungan Leaderboard.
+                    </p>
+                  )}
+                </div>
               </div>
 
               {formType === 'GMM' ? (
@@ -962,8 +1008,9 @@ export default function MonitoringPage() {
                       {form.noAccounts.map((no, idx) => (
                         <div key={idx} style={{ display: 'flex', gap: '8px' }}>
                           <input className="form-input" style={{ flex: 1 }} value={no} placeholder={`No Account ${idx+1}`} onChange={e => {
+                            const val = e.target.value.replace(/\D/g, ''); // Numeric only
                             const newNo = [...form.noAccounts];
-                            newNo[idx] = e.target.value;
+                            newNo[idx] = val;
                             setForm({ ...form, noAccounts: newNo });
                           }} required={idx === 0} />
                           {idx === 0 ? (
@@ -991,8 +1038,9 @@ export default function MonitoringPage() {
                       {form.noAccounts.map((no, idx) => (
                         <div key={idx} style={{ display: 'flex', gap: '8px' }}>
                           <input className="form-input" style={{ flex: 1 }} value={no} placeholder={`No Account ${idx+1}`} onChange={e => {
+                            const val = e.target.value.replace(/\D/g, ''); // Numeric only
                             const newNo = [...form.noAccounts];
-                            newNo[idx] = e.target.value;
+                            newNo[idx] = val;
                             setForm({ ...form, noAccounts: newNo });
                           }} required={idx === 0} />
                           {idx === 0 ? (
@@ -1097,6 +1145,35 @@ export default function MonitoringPage() {
         .status-pending {
           background: #eff6ff !important;
           color: #3b82f6 !important;
+        }
+
+        .table-container {
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          background: white;
+          scrollbar-width: thin;
+        }
+        
+        .data-table {
+          width: 100%;
+          min-width: 800px;
+          border-collapse: separate;
+          border-spacing: 0;
+        }
+
+        @media (max-width: 1024px) {
+          .col-priority-low {
+            display: none !important;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .col-priority-med {
+            display: none !important;
+          }
+          .data-table {
+            min-width: 500px;
+          }
         }
       `}</style>
       {showConfirmModal.visible && (

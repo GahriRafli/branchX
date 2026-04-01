@@ -39,7 +39,10 @@ export async function GET(request: Request) {
 
     const data = await (prisma as any).monitoringActivity.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: [
+        { createdAt: 'desc' },
+        { id: 'desc' }
+      ],
     });
 
     // Automatic Transitions Logic (1 day)
@@ -115,33 +118,50 @@ export async function POST(request: Request) {
     const inputAmount = parseFloat(String(amount)) || 1;
     const inputTarget = parseFloat(String(target)) || 1;
     const inputTotal = parseFloat(String(total)) || 1;
+    const activityDate = body.createdAt ? new Date(body.createdAt) : undefined;
 
-    let values: string[] = [];
-    const rawVal = noAccount;
+    // Helper to parse bulk strings/arrays
+    const parseBulk = (val: any) => {
+      if (Array.isArray(val)) return val.map(v => String(v).trim()).filter(Boolean);
+      if (typeof val === 'string' && (val.includes('\n') || val.includes(','))) {
+        return val.split(/[\n,]+/).map(v => v.trim()).filter(Boolean);
+      }
+      return val ? [String(val).trim()] : [];
+    };
+
+    const accountValues = parseBulk(noAccount);
+    const ktpValues = parseBulk(ktp);
     
-    if (Array.isArray(rawVal)) {
-      values = rawVal.map(v => String(v).trim()).filter(Boolean);
-    } else if (typeof rawVal === 'string' && (rawVal.includes('\n') || rawVal.includes(','))) {
-      values = rawVal.split(/[\n,]+/).map(v => v.trim()).filter(Boolean);
-    } else if (rawVal) {
-      values = [String(rawVal).trim()];
-    }
+    const count = Math.max(accountValues.length, ktpValues.length);
 
-    if (values.length > 1) {
-      const dataToCreate = values.map((val: string) => ({
-        activityType: type,
-        name: String(name || 'Unknown'),
-        codeReferral: String(codeReferral || ''),
-        noAccount: val,
-        product: finalProduct,
-        ktp: String(ktp || ''),
-        amount: inputAmount,
-        target: inputTarget,
-        total: inputTotal,
-        branchCode: String(branchCode || ''),
-        userId: session.userId,
-        status
-      }));
+    if (count > 1) {
+      const dataToCreate = [];
+      for (let i = 0; i < count; i++) {
+        const currentAcc = accountValues[i] || accountValues[0] || "";
+        const currentKtp = ktpValues[i] || ktpValues[0] || "";
+        
+        // Determine product for GMM
+        let p = finalProduct;
+        if (isGMM && (!currentKtp || currentKtp.trim() === "")) {
+          p = "Tabungan Simpel";
+        }
+
+        dataToCreate.push({
+          activityType: type,
+          name: String(name || 'Unknown'),
+          codeReferral: String(codeReferral || ''),
+          noAccount: currentAcc,
+          product: p,
+          ktp: currentKtp,
+          amount: inputAmount,
+          target: inputTarget,
+          total: inputTotal,
+          branchCode: String(branchCode || ''),
+          userId: session.userId,
+          status,
+          ...(activityDate && { createdAt: activityDate })
+        });
+      }
 
       const entries = await (prisma as any).monitoringActivity.createMany({
         data: dataToCreate
@@ -154,7 +174,7 @@ export async function POST(request: Request) {
             data: admins.map((admin: any) => ({
               userId: admin.id,
               type: 'GMM_ENTRY',
-              message: `${name} has submitted ${values.length} bulk GMM entries`,
+              message: `${name} has submitted ${count} bulk GMM entries`,
               isRead: false
             }))
           });
@@ -164,20 +184,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ count: entries.count }, { status: 201 });
     }
 
+    const singleAcc = accountValues[0] || "";
+    const singleKtp = ktpValues[0] || "";
+    let p = finalProduct;
+    if (isGMM && (!singleKtp || singleKtp.trim() === "")) {
+      p = "Tabungan Simpel";
+    }
+
     const entry = await (prisma as any).monitoringActivity.create({
       data: { 
         activityType: type,
         name: String(name || 'Unknown'), 
         codeReferral: String(codeReferral || ''), 
-        noAccount: values[0] || "",
-        product: finalProduct, 
-        ktp: String(ktp || ''),
+        noAccount: singleAcc,
+        product: p, 
+        ktp: singleKtp,
         amount: inputAmount, 
         target: inputTarget, 
         total: inputTotal,
         branchCode: String(branchCode || ''),
         userId: session.userId,
-        status
+        status,
+        ...(activityDate && { createdAt: activityDate })
       },
     });
 
@@ -272,6 +300,10 @@ export async function PATCH(request: Request) {
 
     if (updateData.activityType === 'GMM' && (!updateData.ktp || String(updateData.ktp).trim() === "")) {
       updateData.product = "Tabungan Simpel";
+    }
+
+    if (updateData.createdAt) {
+      updateData.createdAt = new Date(updateData.createdAt);
     }
 
     const entry = await (prisma as any).monitoringActivity.update({
